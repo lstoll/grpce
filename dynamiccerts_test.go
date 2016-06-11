@@ -74,4 +74,5 @@ func TestDynamicCerts(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Error calling RPC: %v", err)
 		}*/
+	s.Stop()
 }

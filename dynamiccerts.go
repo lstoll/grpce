@@ -41,10 +41,23 @@ func NewClientDynamicCertTransportCredentials(store KVStore) credentials.Transpo
 }
 
 func NewServerDynamicCertTransportCredentials(store KVStore, address string, validUntil time.Time) credentials.TransportCredentials {
+	// TODO - expiry/auto-renew?
+
+	// Generate a certificate, save it on outselves, and put it on the KV store.
+	cert, err := genX509KeyPair(address, validUntil)
+	if err != nil {
+		// Log or something, this is a pretty "fatal" error. Maybe even panic
+		return nil
+	}
+	p := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Certificate[0]})
+	store.Put(address, p)
+	servercreds := credentials.NewServerTLSFromCert(cert)
+
 	return &dcerttransport{
 		store:         store,
 		serveraddress: address,
 		validUntil:    validUntil,
+		servercreds:   servercreds,
 	}
 }
 
@@ -71,17 +84,6 @@ func (d *dcerttransport) ClientHandshake(addr string, rawConn net.Conn, timeout 
 func (d *dcerttransport) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	if d.serveraddress == "" {
 		return nil, nil, errors.New("Credentials not initialized for server use via NewServerDynamicCertTransportCredentials")
-	}
-	// TODO - expiry/auto-renew?
-	if d.servercreds == nil {
-		// Generate a certificate, save it on outselves, and put it on the KV store.
-		cert, err := genX509KeyPair(d.serveraddress, d.validUntil)
-		if err != nil {
-			return nil, nil, err
-		}
-		p := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Certificate[0]})
-		d.store.Put(d.serveraddress, p)
-		d.servercreds = credentials.NewServerTLSFromCert(cert)
 	}
 	return d.servercreds.ServerHandshake(rawConn)
 }
