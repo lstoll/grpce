@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
 	"time"
@@ -71,7 +70,6 @@ func NewInstanceAuthTransportCredentials(wrap credentials.TransportCredentials) 
 }
 
 func (i *instanceauthtransport) ClientHandshake(addr string, rawConn net.Conn, timeout time.Duration) (net.Conn, credentials.AuthInfo, error) {
-	fmt.Println("About to start client handshake")
 	// Load the identity doc & sig
 	doc, err := httpGET(identityDocURL, 10)
 	if err != nil {
@@ -95,7 +93,6 @@ func (i *instanceauthtransport) ClientHandshake(addr string, rawConn net.Conn, t
 		conn.Close()
 		return nil, nil, err
 	}
-	fmt.Printf("marshaled data: %q", data)
 	hdr := make([]byte, 4)
 	binary.LittleEndian.PutUint32(hdr, uint32(len(data)))
 	_, err = conn.Write(hdr)
@@ -109,7 +106,6 @@ func (i *instanceauthtransport) ClientHandshake(addr string, rawConn net.Conn, t
 		conn.Close()
 		return nil, nil, err
 	}
-	fmt.Println("finished writing handshake to server")
 
 	// Just carry on. Server will close connection if creds are invalid
 	// TODO - consider some kind of reply for better logging?
@@ -119,19 +115,15 @@ func (i *instanceauthtransport) ClientHandshake(addr string, rawConn net.Conn, t
 
 func (i *instanceauthtransport) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	// Run the wrapped server handshake
-	fmt.Println("About to start server handshake")
 	conn, _, err := i.wrap.ServerHandshake(rawConn)
 	if err != nil {
-		log.Printf("error with wrapped server handshake: %v", err)
 		return nil, nil, err
 	}
 
 	// Read for out message and doc
-	fmt.Println("about to read handshake from client")
 	hdr := make([]byte, 4)
 	_, err = io.ReadAtLeast(conn, hdr, 4)
 	if err != nil {
-		log.Printf("error reading len header from client: %v", err)
 		conn.Close()
 		return nil, nil, err
 	}
@@ -142,14 +134,12 @@ func (i *instanceauthtransport) ServerHandshake(rawConn net.Conn) (net.Conn, cre
 		conn.Close()
 		return nil, nil, err
 	}
-	fmt.Printf("data from client: %q", data)
 	handshake := &handshake{}
 	err = json.Unmarshal(data, handshake)
 	if err != nil {
 		conn.Close()
 		return nil, nil, err
 	}
-	fmt.Println("end reading handshake from client")
 
 	// validate it. If it's not valid, return an error
 	if !verifyDocToPKCS7(handshake.Doc, handshake.Sig) {
@@ -193,7 +183,6 @@ func verifyDocToPKCS7(doc, pkcs7signed []byte) bool {
 
 	p7, err := pkcs7.Parse(sigDecode.Bytes)
 	if err != nil {
-		fmt.Println(err)
 		return false
 	}
 	p7.Content = doc
