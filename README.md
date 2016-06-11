@@ -17,6 +17,19 @@ essentially takes a function that will return a list of addresses, and
 an interval with which to call this. It will then provide the right
 data to the balancer as hosts are added and removed.
 
+```go
+// This is the function we'll poll for the current list of servers
+lookup := func(key string) ([]string, error) {
+	if key == "testtarget" {
+		return []string{"server1.abc.com", "server2.abc.com"}, nil
+	}
+	return nil, fmt.Errorf("Unknown target: %q", key)
+}
+
+conn, err := grpc.Dial("testtarget",
+	grpc.WithBalancer(grpc.RoundRobin(NewPollingResolver("testtarget", 10*time.Second, lookup))))
+```
+
 ### Dynamic certs
 
 This is a TLS credential implementation for the server that generates
@@ -24,6 +37,14 @@ a self-signed cert on the fly. This will get persisted in a KV
 store. The client implementation looks up the cert based on the
 address from the KV store, and validates it at the root cert for this
 connection.
+
+```go
+// store matches a Get/Put/Delete interface.
+s := grpc.NewServer(grpc.Creds(NewServerDynamicCertTransportCredentials(store, address, time.Now().AddDate(0, 0, 1))))
+
+// The client gets the same store.
+conn, err := grpc.Dial(address, grpc.WithTransportCredentials(NewClientDynamicCertTransportCredentials(store)))
+```
 
 ### Instance Identity Document Transport Auth.
 
@@ -41,6 +62,33 @@ function `InstanceIdentityDocumentAuthInfoFromContext` is also
 provided. This can be used in the server implementation to get the
 document information, which can then be used to authorize against the
 instance or account ID.
+
+```go
+// This wraps an existing transport, and layers the doc auth on top.
+s := grpc.NewServer(grpc.Creds(
+	NewInstanceAuthTransportCredentials(
+		NewServerDynamicCertTransportCredentials(store, address, time.Now().AddDate(0, 0, 1)),
+	),
+))
+
+// Same wrapping style on the client
+conn, err := grpc.Dial(address, grpc.WithTransportCredentials(
+	NewInstanceAuthTransportCredentials(
+		NewClientDynamicCertTransportCredentials(store)),
+))
+
+// In your server method, you can retrieve info about the connecting client
+func (t *authtpserver) GetLBInfo(ctx context.Context, req *testproto.LBInfoRequest) (*testproto.LBInfoResponse, error) {
+	ai, err := InstanceIdentityDocumentAuthInfoFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &testproto.LBInfoResponse{
+		Name: ai.InstanceID,
+	}, nil
+}
+
+```
 
 ## Security
 
