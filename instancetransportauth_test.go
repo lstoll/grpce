@@ -111,6 +111,19 @@ SoeFoi4ipg+tIKrm7tI79EWlgcQFb+9UBuh1QbadAxJK3ON1D0EjxFvUnDf/CeIa
 0p6VwEd1Ddx7NQ==
 -----END CERTIFICATE-----`
 
+type authtpserver struct {
+}
+
+func (t *authtpserver) GetLBInfo(ctx context.Context, req *testproto.LBInfoRequest) (*testproto.LBInfoResponse, error) {
+	ai, err := InstanceIdentityDocumentAuthInfoFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &testproto.LBInfoResponse{
+		Name: ai.InstanceID,
+	}, nil
+}
+
 func TestInstanceAuthDynamicCerts(t *testing.T) {
 	// Our store
 	store := &kvstore{data: map[string][]byte{}}
@@ -139,7 +152,7 @@ func TestInstanceAuthDynamicCerts(t *testing.T) {
 			NewServerDynamicCertTransportCredentials(store, address, time.Now().AddDate(0, 0, 1)),
 		),
 	))
-	testproto.RegisterTestProtoServer(s, &tpserver{num: "1"})
+	testproto.RegisterTestProtoServer(s, &authtpserver{})
 	t.Log("Starting server")
 	go s.Serve(lis)
 
@@ -157,9 +170,12 @@ func TestInstanceAuthDynamicCerts(t *testing.T) {
 	}
 	c := testproto.NewTestProtoClient(conn)
 
-	_, err = c.GetLBInfo(context.Background(), &testproto.LBInfoRequest{})
+	resp, err := c.GetLBInfo(context.Background(), &testproto.LBInfoRequest{})
 	if err != nil {
 		t.Fatalf("Error calling RPC: %v", err)
+	}
+	if resp.Name != "i-0e90d494ecf1ea4bc" {
+		t.Fatalf("Server didn't return back our instance ID")
 	}
 
 	// TODO - again, failing test. When we can stop the retry behavior

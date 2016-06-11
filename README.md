@@ -28,4 +28,8 @@ signature fromt the Amazon Instance Identity server, then encode this
 and pass it to the server. On the server side, the transport will read
 this info from the client post connection. It will then check the
 document & signature against AWS's Cert. If the data is missing,
-forged or not signed by AWS the connection will be dropped.
+forged or not signed by AWS the connection will be dropped. The
+function `InstanceIdentityDocumentAuthInfoFromContext` is also
+provided. This can be used in the server implementation to get the
+document information, which can then be used to authorize against the
+instance or account ID.

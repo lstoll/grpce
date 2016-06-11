@@ -12,9 +12,12 @@ import (
 	"net/http"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/fullsailor/pkcs7"
 
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/peer"
 )
 
 var (
@@ -160,6 +163,19 @@ func (i *instanceauthtransport) ServerHandshake(rawConn net.Conn) (net.Conn, cre
 
 func (i *instanceauthtransport) Info() credentials.ProtocolInfo {
 	return i.wrap.Info()
+}
+
+// InstanceIdentityDocumentAuthInfoFromContext will take the requests's context and return the InstanceIdentityDocumentAuthInfo for the caller, or error if it can't look this information up
+func InstanceIdentityDocumentAuthInfoFromContext(ctx context.Context) (*InstanceIdentityDocumentAuthInfo, error) {
+	pr, ok := peer.FromContext(ctx)
+	if !ok {
+		return nil, fmt.Errorf("failed to get peer from ctx")
+	}
+	ia, ok := pr.AuthInfo.(*InstanceIdentityDocumentAuthInfo)
+	if !ok {
+		return nil, fmt.Errorf("failed to get InstanceIdentityDocumentAuthInfo from peer")
+	}
+	return ia, nil
 }
 
 // verifyDocToPKCS7 takes a instance doc and the pkcs7 signed version
