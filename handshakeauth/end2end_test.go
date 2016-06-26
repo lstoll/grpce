@@ -70,6 +70,7 @@ func TestHandshakeAuth(t *testing.T) {
 	}
 
 	// TODO - this does "Fail", but the client enternally reconnects. Investigate how to reject client?
+	// Alt, check underlying connection state
 	/*t.Log("Trying client connection with no key")
 	conn, err = grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(
 		NewClientTransportCredentials(map[string]interface{}{}),
