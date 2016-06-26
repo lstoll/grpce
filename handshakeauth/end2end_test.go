@@ -1,6 +1,8 @@
 package handshakeauth
 
 import (
+	"errors"
+	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -10,6 +12,16 @@ import (
 	"google.golang.org/grpc"
 )
 
+type hs struct{}
+
+func (h *hs) HelloWorld(ctx context.Context, req *helloproto.HelloRequest) (*helloproto.HelloResponse, error) {
+	md := ClientMetadataFromContext(ctx)
+	return &helloproto.HelloResponse{
+		Message:    fmt.Sprintf("Hello, %s!", req.Name),
+		ServerName: fmt.Sprintf("%s", md),
+	}, nil
+}
+
 func TestHandshakeAuth(t *testing.T) {
 	// Instance metadata server. Start with valid docs
 
@@ -18,10 +30,21 @@ func TestHandshakeAuth(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
+	validator := func(req map[string]interface{}) (interface{}, error) {
+		keyVal, ok := req["key"]
+		if !ok {
+			return nil, errors.New("no key")
+		}
+		key, ok := keyVal.(string)
+		if !ok {
+			return nil, errors.New("key not string")
+		}
+		return key, nil
+	}
 	s := grpc.NewServer(grpc.Creds(
-		NewTransportCredentials(),
+		NewServerTransportCredentials(validator),
 	))
-	helloproto.RegisterHelloServer(s, &helloproto.TestHelloServer{})
+	helloproto.RegisterHelloServer(s, &hs{})
 	t.Log("Starting server")
 	go s.Serve(lis)
 
@@ -29,24 +52,37 @@ func TestHandshakeAuth(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Should work out of the box
-	t.Log("Starting client with cert in place")
+	t.Log("Starting client with key set")
 	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(
-		NewTransportCredentials(),
+		NewClientTransportCredentials(map[string]interface{}{"key": "keygoeshere"}),
 	))
 	if err != nil {
 		t.Fatalf("Error connecting to server: %v", err)
 	}
 	c := helloproto.NewHelloClient(conn)
 
-	_, err = c.HelloWorld(context.Background(), &helloproto.HelloRequest{Name: "Handshakin"})
+	resp, err := c.HelloWorld(context.Background(), &helloproto.HelloRequest{Name: "Handshakin"})
 	if err != nil {
 		t.Fatalf("Error calling RPC: %v", err)
 	}
-	/*if resp.Name != "i-0e90d494ecf1ea4bc" {
-		t.Fatalf("Server didn't return back our instance ID")
-	}*/
+	if resp.ServerName != "keygoeshere" {
+		t.Fatalf("Server didn't return back our key")
+	}
 
-	// TODO - again, failing test. When we can stop the retry behavior
+	// TODO - this does "Fail", but the client enternally reconnects. Investigate how to reject client?
+	/*t.Log("Trying client connection with no key")
+	conn, err = grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(
+		NewClientTransportCredentials(map[string]interface{}{}),
+	))
+	if err != nil {
+		t.Fatalf("Error connecting to server: %v", err)
+	}
+	c = helloproto.NewHelloClient(conn)
+
+	resp, err = c.HelloWorld(context.Background(), &helloproto.HelloRequest{Name: "Handshakin"})
+	if err != nil {
+		t.Fatalf("Error calling RPC: %v", err)
+	}*/
 
 	s.Stop()
 }

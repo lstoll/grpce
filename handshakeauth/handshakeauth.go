@@ -3,39 +3,75 @@ package handshakeauth
 import (
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/peer"
 )
 
-type HandshakeAuthInfo struct{}
+type handshakeAuthInfo struct {
+	clientMetadata  interface{}
+	wrappedAuthInfo credentials.AuthInfo
+}
 
-func (h *HandshakeAuthInfo) AuthType() string {
+func (h *handshakeAuthInfo) AuthType() string {
 	return "HandshakeAuthInfo"
 }
 
-type instanceauthtransport struct {
-	wrap credentials.TransportCredentials
+type shaker struct {
+	server    bool
+	wrap      credentials.TransportCredentials
+	send      map[string]interface{}
+	validator ClientHandshakeValidator
 }
 
-type handshake struct {
-	Doc []byte
-	Sig []byte
+type shakeresp struct {
+	Successful bool
+	Errormsg   string
 }
 
-func NewTransportCredentials() credentials.TransportCredentials {
-	return &instanceauthtransport{}
+// ClientHandshakeValidator is the function called when a client tries to
+// connect. It receives the k/v info from the client, and should return an object to
+// attach to the AuthInfo, or error if the connection is rejected
+type ClientHandshakeValidator func(request map[string]interface{}) (authMetadata interface{}, err error)
+
+func NewClientTransportCredentials(send map[string]interface{}) credentials.TransportCredentials {
+	return &shaker{
+		send: send,
+	}
 }
 
-func NewTransportCredentialsWraping(wrap credentials.TransportCredentials) credentials.TransportCredentials {
-	return &instanceauthtransport{
+func NewClientTransportCredentialsWrapping(send map[string]interface{}, wrap credentials.TransportCredentials) credentials.TransportCredentials {
+	return &shaker{
+		send: send,
 		wrap: wrap,
 	}
 }
 
-func (i *instanceauthtransport) ClientHandshake(addr string, rawConn net.Conn, timeout time.Duration) (conn net.Conn, ai credentials.AuthInfo, err error) {
+func NewServerTransportCredentials(validator ClientHandshakeValidator) credentials.TransportCredentials {
+	return &shaker{
+		server:    true,
+		validator: validator,
+	}
+}
+
+func NewServerTransportCredentialsWrapping(validator ClientHandshakeValidator, wrap credentials.TransportCredentials) credentials.TransportCredentials {
+	return &shaker{
+		wrap:      wrap,
+		server:    true,
+		validator: validator,
+	}
+}
+
+func (i *shaker) ClientHandshake(addr string, rawConn net.Conn, timeout time.Duration) (conn net.Conn, ai credentials.AuthInfo, err error) {
+	if i.server {
+		panic("This handshaker is only for client use")
+	}
 	// Call the wrapped handshake
 	if i.wrap != nil {
 		conn, ai, err = i.wrap.ClientHandshake(addr, rawConn, timeout)
@@ -46,37 +82,42 @@ func (i *instanceauthtransport) ClientHandshake(addr string, rawConn net.Conn, t
 		conn = rawConn
 	}
 
-	// Send the doc down the conn.
-	handshake := &handshake{}
-	data, err := json.Marshal(handshake)
+	// Write the initiation to the server
+	data, err := json.Marshal(i.send)
 	if err != nil {
 		conn.Close()
 		return
 	}
-	hdr := make([]byte, 4)
-	binary.LittleEndian.PutUint32(hdr, uint32(len(data)))
-	_, err = conn.Write(hdr)
-	if err != nil {
+	if err = write(conn, data); err != nil {
 		conn.Close()
 		return
 	}
 
-	_, err = conn.Write(data)
+	// Read the response back
+	resp := &shakeresp{}
+	data, err = read(conn)
 	if err != nil {
-		conn.Close()
 		return
 	}
-
-	// Just carry on. Server will close connection if creds are invalid
-	// TODO - consider some kind of reply for better logging?
+	if err = json.Unmarshal(data, resp); err != nil {
+		return
+	}
+	if !resp.Successful {
+		conn.Close()
+		err = errors.New(resp.Errormsg)
+		return
+	}
 
 	return
 }
 
-func (i *instanceauthtransport) ServerHandshake(rawConn net.Conn) (conn net.Conn, ai credentials.AuthInfo, err error) {
+func (i *shaker) ServerHandshake(rawConn net.Conn) (conn net.Conn, ai credentials.AuthInfo, err error) {
+	if !i.server {
+		panic("This handshaker is only for server use")
+	}
 	// Run the wrapped server handshake
 	if i.wrap != nil {
-		conn, _, err = i.wrap.ServerHandshake(rawConn)
+		conn, ai, err = i.wrap.ServerHandshake(rawConn)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -84,53 +125,87 @@ func (i *instanceauthtransport) ServerHandshake(rawConn net.Conn) (conn net.Conn
 		conn = rawConn
 	}
 
-	// Read for out message and doc
-	hdr := make([]byte, 4)
-	_, err = io.ReadAtLeast(conn, hdr, 4)
+	// Read the initiation from the client
+	req := &map[string]interface{}{}
+	data, err := read(conn)
+	if err != nil {
+		return
+	}
+	if err = json.Unmarshal(data, req); err != nil {
+		return
+	}
+	// Call the validator
+	resp := &shakeresp{}
+	md, err := i.validator(*req)
+	if err != nil {
+		resp.Successful = false
+		resp.Errormsg = err.Error()
+	} else {
+		resp.Successful = true
+	}
+	data, err = json.Marshal(resp)
 	if err != nil {
 		conn.Close()
-		return nil, nil, err
+		return
+	}
+	if err = write(conn, data); err != nil {
+		conn.Close()
+		return
+	}
+	if !resp.Successful {
+		conn.Close()
+		return
+	}
+
+	ai = &handshakeAuthInfo{
+		clientMetadata:  md,
+		wrappedAuthInfo: ai,
+	}
+
+	return
+}
+
+func (i *shaker) Info() credentials.ProtocolInfo {
+	if i.wrap != nil {
+		return i.wrap.Info()
+	}
+	return credentials.ProtocolInfo{} // TODO - do we have info?
+}
+
+func read(r io.Reader) ([]byte, error) {
+	hdr := make([]byte, 4)
+	_, err := io.ReadAtLeast(r, hdr, 4)
+	if err != nil {
+		return nil, err
 	}
 	toRead := binary.LittleEndian.Uint32(hdr)
 	data := make([]byte, toRead)
-	_, err = io.ReadAtLeast(conn, data, int(toRead))
-	if err != nil {
-		conn.Close()
-		return nil, nil, err
-	}
-	handshake := &handshake{}
-	err = json.Unmarshal(data, handshake)
-	if err != nil {
-		conn.Close()
-		return nil, nil, err
-	}
-
-	// validate it. If it's not valid, return an error
-
-	ai = &HandshakeAuthInfo{}
-	/*err = json.Unmarshal(handshake.Doc, ai)
-	if err != nil {
-		conn.Close()
-		return nil, nil, err
-	}*/
-
-	// pass off the connection
-	return conn, ai, err
+	_, err = io.ReadAtLeast(r, data, int(toRead))
+	return data, err
 }
 
-func (i *instanceauthtransport) Info() credentials.ProtocolInfo {
-	return i.wrap.Info()
+func write(w io.Writer, d []byte) error {
+	hdr := make([]byte, 4)
+	binary.LittleEndian.PutUint32(hdr, uint32(len(d)))
+	_, err := w.Write(hdr)
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(d)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-// InstanceIdentityDocumentAuthInfoFromContext will take the requests's context and return the InstanceIdentityDocumentAuthInfo for the caller, or error if it can't look this information up
-/*func InstanceIdentityDocumentAuthInfoFromContext(ctx context.Context) (*InstanceIdentityDocumentAuthInfo, error) {
+func ClientMetadataFromContext(ctx context.Context) interface{} {
 	pr, ok := peer.FromContext(ctx)
 	if !ok {
-		return nil, fmt.Errorf("failed to get peer from ctx")
+		return nil
 	}
-	ia, ok := pr.AuthInfo.(*InstanceIdentityDocumentAuthInfo)
+	ia, ok := pr.AuthInfo.(*handshakeAuthInfo)
 	if !ok {
-		return nil, fmt.Errorf("failed to get InstanceIdentityDocumentAuthInfo from peer")
+		return nil
 	}
-	return ia, nil
-}*/
+	return ia.clientMetadata
+}
