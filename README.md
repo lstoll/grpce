@@ -1,16 +1,12 @@
-# GRPC Experiments for AWS/EC2
+# GRPC Componenes
 
-This repo has some experimental components for running services in a dynamic environment inside EC2. It's targeted at grpc-go, but would be easy to adapt to pretty much anything. It's intended to work reliably with litte infrastructure overhead, and without just having one magic shared cert/key everyone uses. The only external dependency is a KV store, which I intend to use S3. S3 is simple, reliable, and likely effective enough for this. Load balancing is handled by the client which eliminates the need for an ELB. Servers generate their own certificates and store the public component in the KV store, to avoid needing a CA infrastructure. This also still allows the revolation of per-server creds, and verifying that the server you connect to is the exact server. Client auth is handled by [Instance Identity Documents](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-identity-documents.html). This allows us to assert the account ID and instance ID of clients, without requiring any pre-shared state. This means instances can be managed inside an ASG, but not using a long-lasting shared key or other external service. All service discover is done via the KV store (i.e S3), with a model that is forgiving of it's consistency model
+This repo has some experimental components for running services in a dynamic environment inside EC2. It's targeted at grpc-go, but would be easy to adapt to pretty much anything. It's intended to work reliably with litte infrastructure overhead, and without just having one magic shared cert/key everyone uses. The only external dependency is a KV store, which I intend to use S3. S3 is simple, reliable, and likely effective enough for this. Load balancing is handled by the client which eliminates the need for an ELB. Servers generate their own certificates and store the public component in the KV store, to avoid needing a CA infrastructure. This also still allows the revocation of per-server creds, and verifying that the server you connect to is the exact server. Client auth is handled by [Instance Identity Documents](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-identity-documents.html). This allows us to assert the account ID and instance ID of clients, without requiring any pre-shared state. This means instances can be managed inside an ASG, but not using a long-lasting shared key or other external service. All service discover is done via the KV store (i.e S3), with a model that is forgiving of it's consistency model
 
 The end result should be a way to securely run services inside AWS without any long lasting or shared credentials, without requiring any infrastructure over other than a S3 bucket and some IAM/role policies.
 
-## Overall flow
-
-![Diagram representing flow in system](https://cdn.lstoll.net/screen/grpcexperiments_flow.html_-_draw.io_2016-06-11_14-29-17.png)
-
 ## Components
 
-### Polling Resolver
+### Polling KV Resolver
 
 This is a resolver for the RoundRobin load balancer in GRPC. It
 essentially takes a function that will return a list of addresses, and
@@ -27,7 +23,7 @@ lookup := func(key string) ([]string, error) {
 }
 
 conn, err := grpc.Dial("testtarget",
-	grpc.WithBalancer(grpc.RoundRobin(NewPollingResolver("testtarget", 10*time.Second, lookup))))
+	grpc.WithBalancer(grpc.RoundRobin(kvresolver.New("testtarget", 10*time.Second, lookup))))
 ```
 
 ### Dynamic certs
@@ -40,55 +36,37 @@ connection.
 
 ```go
 // store matches a Get/Put/Delete interface.
-s := grpc.NewServer(grpc.Creds(NewServerDynamicCertTransportCredentials(store, address, time.Now().AddDate(0, 0, 1))))
+s := grpc.NewServer(grpc.Creds(kvcertverify.NewServerTransportCredentials(store, address, time.Now().AddDate(0, 0, 1))))
 
 // The client gets the same store.
-conn, err := grpc.Dial(address, grpc.WithTransportCredentials(NewClientDynamicCertTransportCredentials(store)))
+conn, err := grpc.Dial(address, grpc.WithTransportCredentials(kvcertverify.NewClientTransportCredentials(store)))
 ```
 
-### Instance Identity Document Transport Auth.
+### Handshake transport auth
 
-This ia a credentials.TransportCredentials implementation intended to
-wrap another transport (e.g dynamic certs). On top of this it adds a
-method for verifying the connecting client via it's
-[Instance Identity Document](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-identity-documents.html). When
-connecting to a server, the client will fetch the document and pkcs7
-signature fromt the Amazon Instance Identity server, then encode this
-and pass it to the server. On the server side, the transport will read
-this info from the client post connection. It will then check the
-document & signature against AWS's Cert. If the data is missing,
-forged or not signed by AWS the connection will be dropped. The
-function `InstanceIdentityDocumentAuthInfoFromContext` is also
-provided. This can be used in the server implementation to get the
-document information, which can then be used to authorize against the
-instance or account ID.
+This is intended to be a generic component that can be used to perform any kind of handshake over the connection when it's established, but before gRPC consumes it. It can wrap another transport (i.e the dynamic certs).
+
+### Instance Identity Document Verification.
+
+Utilities for verifying AWS Instances' [Instance Identity Documents](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-identity-documents.html). This provides a method to fetch the document and pkcs7 signature fromt the Instance Metadata server, which clients can use to retrive them. It also provides a method to check the document & signature against AWS's Cert, returning relevant fields
 
 ```go
-// This wraps an existing transport, and layers the doc auth on top.
-s := grpc.NewServer(grpc.Creds(
-	NewInstanceAuthTransportCredentials(
-		NewServerDynamicCertTransportCredentials(store, address, time.Now().AddDate(0, 0, 1)),
-	),
-))
+// Will get fieles from the metadata API
+doc, sig, err := GetDocumentAndSignature()
 
-// Same wrapping style on the client
-conn, err := grpc.Dial(address, grpc.WithTransportCredentials(
-	NewInstanceAuthTransportCredentials(
-		NewClientDynamicCertTransportCredentials(store)),
-))
-
-// In your server method, you can retrieve info about the connecting client
-func (t *authtpserver) GetLBInfo(ctx context.Context, req *testproto.LBInfoRequest) (*testproto.LBInfoResponse, error) {
-	ai, err := InstanceIdentityDocumentAuthInfoFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return &testproto.LBInfoResponse{
-		Name: ai.InstanceID,
-	}, nil
+// Verify them, returning the document
+iddoc, err := VerifyDocumentAndSignature(doc, sig)
+if err != nil {
+	fmt.Prinln(iddoc.InstanceID)
 }
-
 ```
+
+## Flow design
+
+This is the model I was targeting
+
+![Diagram representing flow in system](https://cdn.lstoll.net/screen/grpcexperiments_flow.html_-_draw.io_2016-06-11_14-29-17.png)
+
 
 ## Security
 
