@@ -8,36 +8,36 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/lstoll/grpcexperiments/testproto"
+	"github.com/lstoll/grpce/helloproto"
 	"golang.org/x/net/context"
 )
 
-type tpserver struct {
+type hserver struct {
 	num string
 }
 
-func (t *tpserver) GetLBInfo(ctx context.Context, req *testproto.LBInfoRequest) (*testproto.LBInfoResponse, error) {
-	return &testproto.LBInfoResponse{
-		Name: t.num,
+func (t *hserver) HelloWorld(ctx context.Context, req *helloproto.HelloRequest) (*helloproto.HelloResponse, error) {
+	return &helloproto.HelloResponse{
+		Message:    fmt.Sprintf("Hello, %s!", req.Name),
+		ServerName: t.num,
 	}, nil
 }
 
 func TestEndToEnd(t *testing.T) {
 	// Start some servers.
-	portbase := "1560"
 	servNums := []string{"1", "2", "3"}
 	servers := []*grpc.Server{}
 	listeners := []net.Listener{}
 	t.Log("Setting up servers")
 	for _, n := range servNums {
-		lis, err := net.Listen("tcp", "127.0.0.1:"+portbase+n)
+		lis, err := net.Listen("tcp", "localhost:0")
 		if err != nil {
 			panic(err)
 		}
 		listeners = append(listeners, lis)
 
 		s := grpc.NewServer()
-		testproto.RegisterTestProtoServer(s, &tpserver{num: n})
+		helloproto.RegisterHelloServer(s, &hserver{num: n})
 		servers = append(servers, s)
 	}
 
@@ -45,30 +45,34 @@ func TestEndToEnd(t *testing.T) {
 	go servers[0].Serve(listeners[0])
 	go servers[1].Serve(listeners[1])
 
-	targets := []string{}
+	targets := []net.Listener{}
 	lookup := func(key string) ([]string, error) {
 		if key == "testtarget" {
-			return targets, nil
+			ret := []string{}
+			for _, t := range targets {
+				ret = append(ret, t.Addr().String())
+			}
+			return ret, nil
 		}
 		return nil, fmt.Errorf("Unknown target: %q", key)
 	}
 
 	t.Log("Starting client with no servers")
 	conn, err := grpc.Dial("testtarget",
-		grpc.WithBalancer(grpc.RoundRobin(NewPollingResolver("testtarget", 1*time.Millisecond, lookup))),
+		grpc.WithBalancer(grpc.RoundRobin(New("testtarget", 1*time.Millisecond, lookup))),
 		grpc.WithInsecure(),
 		grpc.WithTimeout(1*time.Second))
 	if err == nil {
 		t.Fatal("Did not fail to connect with no servers")
 	}
 
-	for _, n := range servNums {
-		targets = append(targets, "127.0.0.1:"+portbase+n)
-	}
+	/*for _, lis := range listeners {
+		targets = append(targets, lis)
+	}*/
 	t.Log("Setting 2 targets and starting balancer")
-	targets = []string{"127.0.0.1:" + portbase + "1", "127.0.0.1:" + portbase + "2"}
+	targets = []net.Listener{listeners[0], listeners[1]}
 	conn, err = grpc.Dial("testtarget",
-		grpc.WithBalancer(grpc.RoundRobin(NewPollingResolver("testtarget", 1*time.Millisecond, lookup))),
+		grpc.WithBalancer(grpc.RoundRobin(New("testtarget", 1*time.Millisecond, lookup))),
 		grpc.WithInsecure(),
 		grpc.WithTimeout(1*time.Second))
 	if err != nil {
@@ -76,9 +80,9 @@ func TestEndToEnd(t *testing.T) {
 	}
 	defer conn.Close()
 
-	c := testproto.NewTestProtoClient(conn)
+	c := helloproto.NewHelloClient(conn)
 
-	_, err = c.GetLBInfo(context.Background(), &testproto.LBInfoRequest{})
+	_, err = c.HelloWorld(context.Background(), &helloproto.HelloRequest{Name: "process"})
 	if err != nil {
 		t.Fatalf("Error calling RPC: %q", err)
 	}
@@ -86,7 +90,7 @@ func TestEndToEnd(t *testing.T) {
 	assertSeenInReqs(t, c, 4, []string{"1", "2"})
 
 	t.Log("Adding 3rd target to balancer, but not starting it")
-	targets = append(targets, "127.0.0.1:"+portbase+"3")
+	targets = append(targets, listeners[2])
 	time.Sleep(2 * time.Millisecond)
 	// TODO - why do we just hang here forever? Seems more a grpc problem
 	/*assertSeenInReqs(t, c, 6, []string{"1", "2", "3"})*/
@@ -103,13 +107,13 @@ func TestEndToEnd(t *testing.T) {
 	assertSeenInReqs(t, c, 4, []string{"2", "3"})
 
 	t.Log("Removing first server from targets")
-	targets = []string{"127.0.0.1:" + portbase + "2", "127.0.0.1:" + portbase + "3"}
+	targets = []net.Listener{listeners[1], listeners[2]}
 	time.Sleep(2 * time.Millisecond)
 	assertSeenInReqs(t, c, 4, []string{"2", "3"})
 
 	t.Log("Stopping second server and removing from targets")
 	servers[1].Stop()
-	targets = []string{"127.0.0.1:" + portbase + "3"}
+	targets = []net.Listener{listeners[2]}
 	time.Sleep(2 * time.Millisecond)
 	assertSeenInReqs(t, c, 2, []string{"3"})
 
@@ -117,14 +121,14 @@ func TestEndToEnd(t *testing.T) {
 	servers[2].Stop()
 }
 
-func assertSeenInReqs(t *testing.T, c testproto.TestProtoClient, numTry int, expect []string) {
+func assertSeenInReqs(t *testing.T, c helloproto.HelloClient, numTry int, expect []string) {
 	seen := map[string]struct{}{}
 	for i := 0; i < numTry; i++ {
-		resp, err := c.GetLBInfo(context.Background(), &testproto.LBInfoRequest{})
+		resp, err := c.HelloWorld(context.Background(), &helloproto.HelloRequest{})
 		if err != nil {
 			t.Fatalf("Error getting LB info: %q", err)
 		}
-		seen[resp.Name] = struct{}{}
+		seen[resp.ServerName] = struct{}{}
 	}
 	for _, e := range expect {
 		if _, ok := seen[e]; !ok {

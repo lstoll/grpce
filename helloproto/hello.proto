@@ -8,6 +8,7 @@ message HelloRequest {
 
 message HelloResponse {
   string Message = 1;
+  string ServerName = 2;
 }
 
 service Hello {

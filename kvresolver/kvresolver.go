@@ -19,7 +19,7 @@ type pollWatcher struct {
 	currAddresses []string
 }
 
-func NewPollingResolver(target string, pollInterval time.Duration, pollFunc func(target string) ([]string, error)) naming.Resolver {
+func New(target string, pollInterval time.Duration, pollFunc func(target string) ([]string, error)) naming.Resolver {
 	return &pollResolver{
 		target:       target,
 		pollFunc:     pollFunc,
