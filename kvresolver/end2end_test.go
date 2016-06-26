@@ -1,4 +1,4 @@
-package grpcexperiments
+package kvresolver
 
 import (
 	"fmt"
