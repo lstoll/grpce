@@ -81,7 +81,7 @@ func TestEndToEnd(t *testing.T) {
 	t.Log("Adding 3rd target to balancer, but not starting it")
 	targets = append(targets, listeners[2])
 	time.Sleep(2 * time.Millisecond)
-	// TODO - why do we just hang here forever? Seems more a grpc problem
+	// TODO - why do we just hang here forever? Seems more a grpc problem timeing out on the connection
 	/*assertSeenInReqs(t, c, 6, []string{"1", "2", "3"})*/
 
 	t.Log("Starting 3rd server")
