@@ -1,16 +1,6 @@
-package grpcexperiments
+package identitydoc
 
-import (
-	"fmt"
-	"net"
-	"net/http"
-	"testing"
-	"time"
-
-	"github.com/lstoll/grpcexperiments/testproto"
-	"golang.org/x/net/context"
-	"google.golang.org/grpc"
-)
+import "testing"
 
 var instance1Pkcs7 = `MIAGCSqGSIb3DQEHAqCAMIACAQExCzAJBgUrDgMCGgUAMIAGCSqGSIb3DQEHAaCAJIAEggGwewog
 ICJwcml2YXRlSXAiIDogIjE3Mi4zMS41NC4yNDkiLAogICJkZXZwYXlQcm9kdWN0Q29kZXMiIDog
@@ -111,78 +101,6 @@ SoeFoi4ipg+tIKrm7tI79EWlgcQFb+9UBuh1QbadAxJK3ON1D0EjxFvUnDf/CeIa
 0p6VwEd1Ddx7NQ==
 -----END CERTIFICATE-----`
 
-type authtpserver struct {
-}
-
-func (t *authtpserver) GetLBInfo(ctx context.Context, req *testproto.LBInfoRequest) (*testproto.LBInfoResponse, error) {
-	ai, err := InstanceIdentityDocumentAuthInfoFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return &testproto.LBInfoResponse{
-		Name: ai.InstanceID,
-	}, nil
-}
-
-func TestInstanceAuthDynamicCerts(t *testing.T) {
-	// Our store
-	store := &kvstore{data: map[string][]byte{}}
-
-	// Instance metadata server. Start with valid docs
-	instanceDoc, pkcs7 := instance1Document, instance1Pkcs7
-	serveMux := http.NewServeMux()
-	serveMux.HandleFunc("/doc", func(w http.ResponseWriter, req *http.Request) {
-		fmt.Fprintf(w, instanceDoc)
-	})
-	serveMux.HandleFunc("/pkcs7", func(w http.ResponseWriter, req *http.Request) {
-		fmt.Fprintf(w, pkcs7)
-	})
-	go http.ListenAndServe("127.0.0.1:15800", serveMux)
-	identityDocURL = "http://127.0.0.1:15800/doc"
-	pkcs7URL = "http://127.0.0.1:15800/pkcs7"
-
-	// Start a server
-	address := "127.0.0.1:15621"
-	lis, err := net.Listen("tcp", address)
-	if err != nil {
-		panic(err)
-	}
-	s := grpc.NewServer(grpc.Creds(
-		NewInstanceAuthTransportCredentials(
-			NewServerDynamicCertTransportCredentials(store, address, time.Now().AddDate(0, 0, 1)),
-		),
-	))
-	testproto.RegisterTestProtoServer(s, &authtpserver{})
-	t.Log("Starting server")
-	go s.Serve(lis)
-
-	// Let the server gen certs, start etc.
-	time.Sleep(100 * time.Millisecond)
-
-	// Should work out of the box
-	t.Log("Starting client with cert in place")
-	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(
-		NewInstanceAuthTransportCredentials(
-			NewClientDynamicCertTransportCredentials(store)),
-	))
-	if err != nil {
-		t.Fatalf("Error connecting to server: %v", err)
-	}
-	c := testproto.NewTestProtoClient(conn)
-
-	resp, err := c.GetLBInfo(context.Background(), &testproto.LBInfoRequest{})
-	if err != nil {
-		t.Fatalf("Error calling RPC: %v", err)
-	}
-	if resp.Name != "i-0e90d494ecf1ea4bc" {
-		t.Fatalf("Server didn't return back our instance ID")
-	}
-
-	// TODO - again, failing test. When we can stop the retry behavior
-
-	s.Stop()
-}
-
 func TestDocVerification(t *testing.T) {
 	if !verifyDocToPKCS7([]byte(instance1Document), []byte(instance1Pkcs7)) {
 		t.Error("Instance 1 valid docs failed auth")
@@ -199,3 +117,18 @@ func TestDocVerification(t *testing.T) {
 	}
 	awsPubKey = origCert
 }
+
+/*func TestHTTPClient(t *testing.T) {
+	instanceDoc, pkcs7 := instance1Document, instance1Pkcs7
+	serveMux := http.NewServeMux()
+	serveMux.HandleFunc("/doc", func(w http.ResponseWriter, req *http.Request) {
+		fmt.Fprintf(w, instanceDoc)
+	})
+	serveMux.HandleFunc("/pkcs7", func(w http.ResponseWriter, req *http.Request) {
+		fmt.Fprintf(w, pkcs7)
+	})
+	go http.ListenAndServe("127.0.0.1:15800", serveMux)
+	identityDocURL = "http://127.0.0.1:15800/doc"
+	pkcs7URL = "http://127.0.0.1:15800/pkcs7"
+
+}*/
