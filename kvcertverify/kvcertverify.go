@@ -33,14 +33,14 @@ type dcerttransport struct {
 	validUntil    time.Time
 }
 
-func NewClientDynamicCertTransportCredentials(store KVStore) credentials.TransportCredentials {
+func NewClientTransportCredentials(store KVStore) credentials.TransportCredentials {
 	return &dcerttransport{
 		store:       store,
 		clientcreds: map[string]credentials.TransportCredentials{},
 	}
 }
 
-func NewServerDynamicCertTransportCredentials(store KVStore, address string, validUntil time.Time) credentials.TransportCredentials {
+func NewServerTransportCredentials(store KVStore, address string, validUntil time.Time) credentials.TransportCredentials {
 	// TODO - expiry/auto-renew?
 
 	// Generate a certificate, save it on outselves, and put it on the KV store.

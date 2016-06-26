@@ -8,7 +8,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/lstoll/grpcexperiments/testproto"
+	"github.com/lstoll/grpce/helloproto"
 	"golang.org/x/net/context"
 )
 
@@ -41,8 +41,8 @@ func TestDynamicCerts(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	s := grpc.NewServer(grpc.Creds(NewServerDynamicCertTransportCredentials(store, address, time.Now().AddDate(0, 0, 1))))
-	testproto.RegisterTestProtoServer(s, &tpserver{num: "1"})
+	s := grpc.NewServer(grpc.Creds(NewServerTransportCredentials(store, address, time.Now().AddDate(0, 0, 1))))
+	helloproto.RegisterHelloServer(s, &helloproto.TestHelloServer{ServerName: "1"})
 	t.Log("Starting server")
 	go s.Serve(lis)
 
@@ -50,13 +50,13 @@ func TestDynamicCerts(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	t.Log("Starting client with cert in place")
-	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(NewClientDynamicCertTransportCredentials(store)))
+	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(NewClientTransportCredentials(store)))
 	if err != nil {
 		t.Fatalf("Error connecting to server: %v", err)
 	}
-	c := testproto.NewTestProtoClient(conn)
+	c := helloproto.NewHelloClient(conn)
 
-	_, err = c.GetLBInfo(context.Background(), &testproto.LBInfoRequest{})
+	_, err = c.HelloWorld(context.Background(), &helloproto.HelloRequest{Name: "kvcertverify"})
 	if err != nil {
 		t.Fatalf("Error calling RPC: %v", err)
 	}

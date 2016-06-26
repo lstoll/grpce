@@ -12,17 +12,6 @@ import (
 	"golang.org/x/net/context"
 )
 
-type hserver struct {
-	num string
-}
-
-func (t *hserver) HelloWorld(ctx context.Context, req *helloproto.HelloRequest) (*helloproto.HelloResponse, error) {
-	return &helloproto.HelloResponse{
-		Message:    fmt.Sprintf("Hello, %s!", req.Name),
-		ServerName: t.num,
-	}, nil
-}
-
 func TestEndToEnd(t *testing.T) {
 	// Start some servers.
 	servNums := []string{"1", "2", "3"}
@@ -37,7 +26,7 @@ func TestEndToEnd(t *testing.T) {
 		listeners = append(listeners, lis)
 
 		s := grpc.NewServer()
-		helloproto.RegisterHelloServer(s, &hserver{num: n})
+		helloproto.RegisterHelloServer(s, &helloproto.TestHelloServer{ServerName: n})
 		servers = append(servers, s)
 	}
 
