@@ -15,8 +15,10 @@ import (
 var ErrInvalidDocument = fmt.Errorf("The provided identify document does not match the signature")
 
 var (
-	identityDocURL = "http://169.254.169.254/latest/dynamic/instance-identity/document"
-	pkcs7URL       = "http://169.254.169.254/latest/dynamic/instance-identity/pkcs7"
+	// IdentityDocURL is the URL to retrieve the identity doc from
+	IdentityDocURL = "http://169.254.169.254/latest/dynamic/instance-identity/document"
+	// Pkcs7URL is the URL to retrieve the signed identity doc from
+	Pkcs7URL = "http://169.254.169.254/latest/dynamic/instance-identity/pkcs7"
 )
 
 var awsPubKey = `-----BEGIN CERTIFICATE-----
@@ -49,11 +51,11 @@ type InstanceIdentityDocument struct {
 
 func GetDocumentAndSignature() (doc, p7sig []byte, err error) {
 	// Load the identity doc & sig
-	doc, err = httpGET(identityDocURL, 10)
+	doc, err = httpGET(IdentityDocURL, 10)
 	if err != nil {
 		return
 	}
-	p7sig, err = httpGET(pkcs7URL, 10)
+	p7sig, err = httpGET(Pkcs7URL, 10)
 	if err != nil {
 		return
 	}
