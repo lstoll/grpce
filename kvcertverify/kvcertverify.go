@@ -10,7 +10,6 @@ import (
 	"errors"
 	"math/big"
 	"net"
-	"sync"
 	"time"
 
 	"google.golang.org/grpc/credentials"
@@ -23,10 +22,8 @@ type KVStore interface {
 }
 
 type dcerttransport struct {
-	store KVStore
-	// For clients
-	clientcredsMu sync.Mutex
-	clientcreds   map[string]credentials.TransportCredentials
+	store     KVStore
+	clientUse bool
 	// For servers
 	servercreds   credentials.TransportCredentials
 	serveraddress string
@@ -35,8 +32,8 @@ type dcerttransport struct {
 
 func NewClientTransportCredentials(store KVStore) credentials.TransportCredentials {
 	return &dcerttransport{
-		store:       store,
-		clientcreds: map[string]credentials.TransportCredentials{},
+		store:     store,
+		clientUse: true,
 	}
 }
 
@@ -62,23 +59,20 @@ func NewServerTransportCredentials(store KVStore, address string, validUntil tim
 }
 
 func (d *dcerttransport) ClientHandshake(addr string, rawConn net.Conn, timeout time.Duration) (net.Conn, credentials.AuthInfo, error) {
-	if d.clientcreds == nil {
+	if !d.clientUse {
 		return nil, nil, errors.New("Credentials not initialized for client use via NewClientDynamicCertTransportCredentials")
 	}
 	// Be brutal and lazy
-	d.clientcredsMu.Lock()
-	defer d.clientcredsMu.Unlock()
-	if _, ok := d.clientcreds[addr]; !ok {
-		// Build client creds for this host
-		rawCert, err := d.store.Get(addr)
-		if err != nil {
-			return nil, nil, err
-		}
-		capool := x509.NewCertPool()
-		capool.AppendCertsFromPEM(rawCert)
-		d.clientcreds[addr] = credentials.NewClientTLSFromCert(capool, addr)
+	// Build client creds for this host
+	rawCert, err := d.store.Get(addr)
+	if err != nil {
+		return nil, nil, err
 	}
-	return d.clientcreds[addr].ClientHandshake(addr, rawConn, timeout)
+	capool := x509.NewCertPool()
+	capool.AppendCertsFromPEM(rawCert)
+	clientcreds := credentials.NewClientTLSFromCert(capool, addr)
+
+	return clientcreds.ClientHandshake(addr, rawConn, timeout)
 }
 
 func (d *dcerttransport) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
