@@ -4,6 +4,8 @@ import (
 	"errors"
 	"time"
 
+	"github.com/lstoll/grpce/reporters"
+
 	"google.golang.org/grpc/naming"
 )
 
@@ -11,6 +13,7 @@ type pollResolver struct {
 	target       string
 	pollFunc     func(target string) ([]string, error)
 	pollInterval time.Duration
+	opts         *kvrOptions
 }
 
 type pollWatcher struct {
@@ -19,11 +22,36 @@ type pollWatcher struct {
 	currAddresses []string
 }
 
-func New(target string, pollInterval time.Duration, pollFunc func(target string) ([]string, error)) naming.Resolver {
+type kvrOptions struct {
+	errorReporter   reporters.ErrorReporter
+	metricsReporter reporters.MetricsReporter
+}
+
+type KVROption func(*kvrOptions)
+
+func WithErrorReporter(er reporters.ErrorReporter) KVROption {
+	return func(o *kvrOptions) {
+		o.errorReporter = er
+	}
+}
+
+func WithMetricsReporter(mr reporters.MetricsReporter) KVROption {
+	return func(o *kvrOptions) {
+		o.metricsReporter = mr
+	}
+}
+
+func New(target string, pollInterval time.Duration, pollFunc func(target string) ([]string, error), opts ...KVROption) naming.Resolver {
+	kvo := &kvrOptions{}
+	for _, opt := range opts {
+		opt(kvo)
+	}
+
 	return &pollResolver{
 		target:       target,
 		pollFunc:     pollFunc,
 		pollInterval: pollInterval,
+		opts:         kvo,
 	}
 }
 
@@ -50,8 +78,8 @@ func (p *pollResolver) Resolve(target string) (naming.Watcher, error) {
 				updates := []*naming.Update{}
 				addresses, err := p.pollFunc(p.target)
 				if err != nil {
-					// Retry later
-					// TODO - log?
+					reporters.ReportError(p.opts.errorReporter, err)
+					reporters.ReportCount(p.opts.metricsReporter, "kvresolver.pollfunc.errors", 1)
 					break
 				}
 				// for each address that we found that isn't in the current state, send an update

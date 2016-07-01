@@ -8,6 +8,8 @@ import (
 	"net"
 	"time"
 
+	"github.com/lstoll/grpce/reporters"
+
 	"golang.org/x/net/context"
 
 	"google.golang.org/grpc/credentials"
@@ -28,6 +30,7 @@ type shaker struct {
 	wrap      credentials.TransportCredentials
 	send      map[string]interface{}
 	validator ClientHandshakeValidator
+	opts      *hsOpts
 }
 
 type shakeresp struct {
@@ -35,36 +38,75 @@ type shakeresp struct {
 	Errormsg   string
 }
 
+type hsOpts struct {
+	errorReporter   reporters.ErrorReporter
+	metricsReporter reporters.MetricsReporter
+}
+
+type HSOption func(*hsOpts)
+
+func WithErrorReporter(er reporters.ErrorReporter) HSOption {
+	return func(o *hsOpts) {
+		o.errorReporter = er
+	}
+}
+
+func WithMetricsReporter(mr reporters.MetricsReporter) HSOption {
+	return func(o *hsOpts) {
+		o.metricsReporter = mr
+	}
+}
+
 // ClientHandshakeValidator is the function called when a client tries to
 // connect. It receives the k/v info from the client, and should return an object to
 // attach to the AuthInfo, or error if the connection is rejected
 type ClientHandshakeValidator func(request map[string]interface{}) (authMetadata interface{}, err error)
 
-func NewClientTransportCredentials(send map[string]interface{}) credentials.TransportCredentials {
+func NewClientTransportCredentials(send map[string]interface{}, opts ...HSOption) credentials.TransportCredentials {
+	hso := &hsOpts{}
+	for _, opt := range opts {
+		opt(hso)
+	}
 	return &shaker{
 		send: send,
+		opts: hso,
 	}
 }
 
-func NewClientTransportCredentialsWrapping(send map[string]interface{}, wrap credentials.TransportCredentials) credentials.TransportCredentials {
+func NewClientTransportCredentialsWrapping(send map[string]interface{}, wrap credentials.TransportCredentials, opts ...HSOption) credentials.TransportCredentials {
+	hso := &hsOpts{}
+	for _, opt := range opts {
+		opt(hso)
+	}
 	return &shaker{
 		send: send,
 		wrap: wrap,
+		opts: hso,
 	}
 }
 
-func NewServerTransportCredentials(validator ClientHandshakeValidator) credentials.TransportCredentials {
+func NewServerTransportCredentials(validator ClientHandshakeValidator, opts ...HSOption) credentials.TransportCredentials {
+	hso := &hsOpts{}
+	for _, opt := range opts {
+		opt(hso)
+	}
 	return &shaker{
 		server:    true,
 		validator: validator,
+		opts:      hso,
 	}
 }
 
-func NewServerTransportCredentialsWrapping(validator ClientHandshakeValidator, wrap credentials.TransportCredentials) credentials.TransportCredentials {
+func NewServerTransportCredentialsWrapping(validator ClientHandshakeValidator, wrap credentials.TransportCredentials, opts ...HSOption) credentials.TransportCredentials {
+	hso := &hsOpts{}
+	for _, opt := range opts {
+		opt(hso)
+	}
 	return &shaker{
 		wrap:      wrap,
 		server:    true,
 		validator: validator,
+		opts:      hso,
 	}
 }
 
@@ -76,6 +118,8 @@ func (i *shaker) ClientHandshake(addr string, rawConn net.Conn, timeout time.Dur
 	if i.wrap != nil {
 		conn, ai, err = i.wrap.ClientHandshake(addr, rawConn, timeout)
 		if err != nil {
+			reporters.ReportError(i.opts.errorReporter, err)
+			reporters.ReportCount(i.opts.metricsReporter, "handshakeauth.client.wrapped.errors", 1)
 			return nil, nil, err
 		}
 	} else {
@@ -85,10 +129,12 @@ func (i *shaker) ClientHandshake(addr string, rawConn net.Conn, timeout time.Dur
 	// Write the initiation to the server
 	data, err := json.Marshal(i.send)
 	if err != nil {
+		reporters.ReportError(i.opts.errorReporter, err)
 		conn.Close()
 		return
 	}
 	if err = write(conn, data); err != nil {
+		reporters.ReportError(i.opts.errorReporter, err)
 		conn.Close()
 		return
 	}
@@ -97,14 +143,18 @@ func (i *shaker) ClientHandshake(addr string, rawConn net.Conn, timeout time.Dur
 	resp := &shakeresp{}
 	data, err = read(conn)
 	if err != nil {
+		reporters.ReportError(i.opts.errorReporter, err)
 		return
 	}
 	if err = json.Unmarshal(data, resp); err != nil {
+		reporters.ReportError(i.opts.errorReporter, err)
 		return
 	}
 	if !resp.Successful {
 		conn.Close()
 		err = errors.New(resp.Errormsg)
+		reporters.ReportError(i.opts.errorReporter, err)
+		reporters.ReportCount(i.opts.metricsReporter, "handshakeauth.client.unsuccessful", 1)
 		return
 	}
 
@@ -119,6 +169,8 @@ func (i *shaker) ServerHandshake(rawConn net.Conn) (conn net.Conn, ai credential
 	if i.wrap != nil {
 		conn, ai, err = i.wrap.ServerHandshake(rawConn)
 		if err != nil {
+			reporters.ReportError(i.opts.errorReporter, err)
+			reporters.ReportCount(i.opts.metricsReporter, "handshakeauth.server.wrapped.errors", 1)
 			return nil, nil, err
 		}
 	} else {
@@ -129,9 +181,11 @@ func (i *shaker) ServerHandshake(rawConn net.Conn) (conn net.Conn, ai credential
 	req := &map[string]interface{}{}
 	data, err := read(conn)
 	if err != nil {
+		reporters.ReportError(i.opts.errorReporter, err)
 		return
 	}
 	if err = json.Unmarshal(data, req); err != nil {
+		reporters.ReportError(i.opts.errorReporter, err)
 		return
 	}
 	// Call the validator
@@ -145,14 +199,17 @@ func (i *shaker) ServerHandshake(rawConn net.Conn) (conn net.Conn, ai credential
 	}
 	data, err = json.Marshal(resp)
 	if err != nil {
+		reporters.ReportError(i.opts.errorReporter, err)
 		conn.Close()
 		return
 	}
 	if err = write(conn, data); err != nil {
+		reporters.ReportError(i.opts.errorReporter, err)
 		conn.Close()
 		return
 	}
 	if !resp.Successful {
+		reporters.ReportError(i.opts.errorReporter, err)
 		conn.Close()
 		return
 	}

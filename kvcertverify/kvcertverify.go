@@ -12,6 +12,8 @@ import (
 	"net"
 	"time"
 
+	"github.com/lstoll/grpce/reporters"
+
 	"google.golang.org/grpc/credentials"
 )
 
@@ -28,22 +30,52 @@ type dcerttransport struct {
 	servercreds   credentials.TransportCredentials
 	serveraddress string
 	validUntil    time.Time
+	opts          *kvcvOpts
 }
 
-func NewClientTransportCredentials(store KVStore) credentials.TransportCredentials {
-	return &dcerttransport{
-		store:     store,
-		clientUse: true,
+type kvcvOpts struct {
+	errorReporter   reporters.ErrorReporter
+	metricsReporter reporters.MetricsReporter
+}
+
+type KVCVOption func(*kvcvOpts)
+
+func WithErrorReporter(er reporters.ErrorReporter) KVCVOption {
+	return func(o *kvcvOpts) {
+		o.errorReporter = er
 	}
 }
 
-func NewServerTransportCredentials(store KVStore, address string, validUntil time.Time) credentials.TransportCredentials {
+func WithMetricsReporter(mr reporters.MetricsReporter) KVCVOption {
+	return func(o *kvcvOpts) {
+		o.metricsReporter = mr
+	}
+}
+
+func NewClientTransportCredentials(store KVStore, opts ...KVCVOption) credentials.TransportCredentials {
+	kvcvo := &kvcvOpts{}
+	for _, opt := range opts {
+		opt(kvcvo)
+	}
+	return &dcerttransport{
+		store:     store,
+		clientUse: true,
+		opts:      kvcvo,
+	}
+}
+
+func NewServerTransportCredentials(store KVStore, address string, validUntil time.Time, opts ...KVCVOption) credentials.TransportCredentials {
+	kvcvo := &kvcvOpts{}
+	for _, opt := range opts {
+		opt(kvcvo)
+	}
 	// TODO - expiry/auto-renew?
 
 	// Generate a certificate, save it on outselves, and put it on the KV store.
 	cert, err := genX509KeyPair(address, validUntil)
 	if err != nil {
-		// Log or something, this is a pretty "fatal" error. Maybe even panic
+		reporters.ReportError(kvcvo.errorReporter, err)
+		// Should we even panic here?
 		return nil
 	}
 	p := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Certificate[0]})
@@ -55,6 +87,7 @@ func NewServerTransportCredentials(store KVStore, address string, validUntil tim
 		serveraddress: address,
 		validUntil:    validUntil,
 		servercreds:   servercreds,
+		opts:          kvcvo,
 	}
 }
 
@@ -66,20 +99,32 @@ func (d *dcerttransport) ClientHandshake(addr string, rawConn net.Conn, timeout 
 	// Build client creds for this host
 	rawCert, err := d.store.Get(addr)
 	if err != nil {
+		reporters.ReportError(d.opts.errorReporter, err)
+		reporters.ReportCount(d.opts.metricsReporter, "kvcertverify.store.errors", 1)
 		return nil, nil, err
 	}
 	capool := x509.NewCertPool()
 	capool.AppendCertsFromPEM(rawCert)
 	clientcreds := credentials.NewClientTLSFromCert(capool, addr)
 
-	return clientcreds.ClientHandshake(addr, rawConn, timeout)
+	retConn, ai, err := clientcreds.ClientHandshake(addr, rawConn, timeout)
+	if err != nil {
+		reporters.ReportError(d.opts.errorReporter, err)
+		reporters.ReportCount(d.opts.metricsReporter, "kvcertverify.client.underlyingHandshake.errors", 1)
+	}
+	return retConn, ai, err
 }
 
 func (d *dcerttransport) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	if d.serveraddress == "" {
 		return nil, nil, errors.New("Credentials not initialized for server use via NewServerDynamicCertTransportCredentials")
 	}
-	return d.servercreds.ServerHandshake(rawConn)
+	retConn, ai, err := d.servercreds.ServerHandshake(rawConn)
+	if err != nil {
+		reporters.ReportError(d.opts.errorReporter, err)
+		reporters.ReportCount(d.opts.metricsReporter, "kvcertverify.server.underlyingHandshake.errors", 1)
+	}
+	return retConn, ai, err
 }
 
 func (d *dcerttransport) Info() credentials.ProtocolInfo {
