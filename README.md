@@ -61,6 +61,17 @@ if err != nil {
 }
 ```
 
+### go-metrics Reporting Interceptors
+
+Interceptors that will report stats about the server to a go-metrics registry
+
+```
+s := grpc.NewServer(
+	grpc.StreamInterceptor(NewStreamServerInterceptor(registry, "p")),
+	grpc.UnaryInterceptor(NewUnaryServerInterceptor(registry, "p")),
+)
+```
+
 ## Flow design
 
 This is the model I was targeting
