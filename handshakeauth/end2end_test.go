@@ -22,6 +22,14 @@ func (h *hs) HelloWorld(ctx context.Context, req *helloproto.HelloRequest) (*hel
 	}, nil
 }
 
+type errcatcher struct {
+	err error
+}
+
+func (e *errcatcher) ReportError(err error) {
+	e.err = err
+}
+
 func TestHandshakeAuth(t *testing.T) {
 	// Instance metadata server. Start with valid docs
 
@@ -71,19 +79,32 @@ func TestHandshakeAuth(t *testing.T) {
 
 	// TODO - this does "Fail", but the client enternally reconnects. Investigate how to reject client?
 	// Alt, check underlying connection state
-	/*t.Log("Trying client connection with no key")
+	t.Log("Trying client connection with no key")
+	ec := &errcatcher{}
 	conn, err = grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(
-		NewClientTransportCredentials(map[string]interface{}{}),
+		NewClientTransportCredentials(map[string]interface{}{}, HSOption(WithErrorReporter(ec))),
 	))
 	if err != nil {
 		t.Fatalf("Error connecting to server: %v", err)
 	}
 	c = helloproto.NewHelloClient(conn)
 
-	resp, err = c.HelloWorld(context.Background(), &helloproto.HelloRequest{Name: "Handshakin"})
-	if err != nil {
-		t.Fatalf("Error calling RPC: %v", err)
-	}*/
+	success := make(chan struct{}, 1)
+	go func() {
+		for {
+			if ec.err != nil {
+				success <- struct{}{}
+				break
+			}
+		}
+	}()
+	select {
+	case <-time.After(time.Second * 1):
+		t.Error("Connection should have errored, but error not caught")
+	case <-success:
+	}
+
+	conn.Close()
 
 	s.Stop()
 }
