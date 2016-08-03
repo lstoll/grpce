@@ -65,6 +65,48 @@ func (p *pollResolver) Resolve(target string) (naming.Watcher, error) {
 		currAddresses: []string{},
 	}
 
+	updateAddrs := func() error {
+		updates := []*naming.Update{}
+		addresses, err := p.pollFunc(p.target)
+		if err != nil {
+			reporters.ReportError(p.opts.errorReporter, err)
+			reporters.ReportCount(p.opts.metricsReporter, "kvresolver.pollfunc.errors", 1)
+			return err
+		}
+		// for each address that we found that isn't in the current state, send an update
+		for _, a := range addresses {
+			found := false
+			for _, curr := range pw.currAddresses {
+				if a == curr {
+					found = true
+					break
+				}
+			}
+			if !found {
+				updates = append(updates, &naming.Update{Op: naming.Add, Addr: a})
+			}
+		}
+
+		// for each address that is in the current state but isn't in the found, send a delete
+		for _, curr := range pw.currAddresses {
+			found := false
+			for _, a := range addresses {
+				if curr == a {
+					found = true
+					break
+				}
+			}
+			if !found {
+				updates = append(updates, &naming.Update{Op: naming.Delete, Addr: curr})
+			}
+		}
+
+		pw.currAddresses = addresses
+		uc <- updates
+
+		return nil
+	}
+
 	go func() {
 		ticker := time.NewTicker(p.pollInterval)
 		for {
@@ -75,46 +117,15 @@ func (p *pollResolver) Resolve(target string) (naming.Watcher, error) {
 					return
 				}
 			case _ = <-ticker.C:
-				updates := []*naming.Update{}
-				addresses, err := p.pollFunc(p.target)
-				if err != nil {
-					reporters.ReportError(p.opts.errorReporter, err)
-					reporters.ReportCount(p.opts.metricsReporter, "kvresolver.pollfunc.errors", 1)
+				if err := updateAddrs(); err != nil {
 					break
 				}
-				// for each address that we found that isn't in the current state, send an update
-				for _, a := range addresses {
-					found := false
-					for _, curr := range pw.currAddresses {
-						if a == curr {
-							found = true
-							break
-						}
-					}
-					if !found {
-						updates = append(updates, &naming.Update{Op: naming.Add, Addr: a})
-					}
-				}
-
-				// for each address that is in the current state but isn't in the found, send a delete
-				for _, curr := range pw.currAddresses {
-					found := false
-					for _, a := range addresses {
-						if curr == a {
-							found = true
-							break
-						}
-					}
-					if !found {
-						updates = append(updates, &naming.Update{Op: naming.Delete, Addr: curr})
-					}
-				}
-
-				pw.currAddresses = addresses
-				uc <- updates
 			}
 		}
 	}()
+
+	// Initial seed. Do async to not block
+	go updateAddrs()
 
 	return pw, nil
 }

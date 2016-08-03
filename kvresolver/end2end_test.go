@@ -12,7 +12,14 @@ import (
 	"golang.org/x/net/context"
 )
 
+type errprint struct{}
+
+func (e *errprint) ReportError(err error) {
+	fmt.Println(err)
+}
+
 func TestEndToEnd(t *testing.T) {
+	ep := &errprint{}
 	// Start some servers.
 	servNums := []string{"1", "2", "3"}
 	servers := []*grpc.Server{}
@@ -48,7 +55,7 @@ func TestEndToEnd(t *testing.T) {
 
 	t.Log("Starting client with no servers")
 	conn, err := grpc.Dial("testtarget",
-		grpc.WithBalancer(grpc.RoundRobin(New("testtarget", 1*time.Millisecond, lookup))),
+		grpc.WithBalancer(grpc.RoundRobin(New("testtarget", 1*time.Millisecond, lookup, WithErrorReporter(ep)))),
 		grpc.WithInsecure(),
 		grpc.WithTimeout(1*time.Second))
 	if err == nil {
@@ -61,7 +68,7 @@ func TestEndToEnd(t *testing.T) {
 	t.Log("Setting 2 targets and starting balancer")
 	targets = []net.Listener{listeners[0], listeners[1]}
 	conn, err = grpc.Dial("testtarget",
-		grpc.WithBalancer(grpc.RoundRobin(New("testtarget", 1*time.Millisecond, lookup))),
+		grpc.WithBalancer(grpc.RoundRobin(New("testtarget", 1*time.Millisecond, lookup, WithErrorReporter(ep)))),
 		grpc.WithInsecure(),
 		grpc.WithTimeout(1*time.Second))
 	if err != nil {
