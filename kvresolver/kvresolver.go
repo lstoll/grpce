@@ -131,6 +131,7 @@ func (p *pollResolver) Resolve(target string) (naming.Watcher, error) {
 }
 
 func (p *pollWatcher) Close() {
+	close(p.closeChan)
 	close(p.updChan)
 }
 
@@ -143,7 +144,7 @@ func (p *pollWatcher) Next() ([]*naming.Update, error) {
 		return ret, nil
 	case _, ok := <-p.closeChan:
 		if !ok {
-			return nil, errors.New("Warcher closed")
+			return nil, errors.New("Watcher closed")
 		}
 	}
 	return nil, errors.New("How did we get here")
