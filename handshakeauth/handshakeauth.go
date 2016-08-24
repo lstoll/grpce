@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"net"
-	"time"
 
 	"github.com/lstoll/grpce/reporters"
 
@@ -110,13 +109,13 @@ func NewServerTransportCredentialsWrapping(validator ClientHandshakeValidator, w
 	}
 }
 
-func (i *shaker) ClientHandshake(addr string, rawConn net.Conn, timeout time.Duration) (conn net.Conn, ai credentials.AuthInfo, err error) {
+func (i *shaker) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (conn net.Conn, ai credentials.AuthInfo, err error) {
 	if i.server {
 		panic("This handshaker is only for client use")
 	}
 	// Call the wrapped handshake
 	if i.wrap != nil {
-		conn, ai, err = i.wrap.ClientHandshake(addr, rawConn, timeout)
+		conn, ai, err = i.wrap.ClientHandshake(ctx, addr, rawConn)
 		if err != nil {
 			reporters.ReportError(i.opts.errorReporter, err)
 			reporters.ReportCount(i.opts.metricsReporter, "handshakeauth.client.wrapped.errors", 1)

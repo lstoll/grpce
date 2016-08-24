@@ -12,6 +12,8 @@ import (
 	"net"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/lstoll/grpce/reporters"
 
 	"google.golang.org/grpc/credentials"
@@ -91,7 +93,7 @@ func NewServerTransportCredentials(store KVStore, address string, validUntil tim
 	}
 }
 
-func (d *dcerttransport) ClientHandshake(addr string, rawConn net.Conn, timeout time.Duration) (net.Conn, credentials.AuthInfo, error) {
+func (d *dcerttransport) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	if !d.clientUse {
 		return nil, nil, errors.New("Credentials not initialized for client use via NewClientDynamicCertTransportCredentials")
 	}
@@ -107,7 +109,7 @@ func (d *dcerttransport) ClientHandshake(addr string, rawConn net.Conn, timeout 
 	capool.AppendCertsFromPEM(rawCert)
 	clientcreds := credentials.NewClientTLSFromCert(capool, addr)
 
-	retConn, ai, err := clientcreds.ClientHandshake(addr, rawConn, timeout)
+	retConn, ai, err := clientcreds.ClientHandshake(ctx, addr, rawConn)
 	if err != nil {
 		reporters.ReportError(d.opts.errorReporter, err)
 		reporters.ReportCount(d.opts.metricsReporter, "kvcertverify.client.underlyingHandshake.errors", 1)
