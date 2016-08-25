@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/fullsailor/pkcs7"
+	"github.com/lstoll/pkcs7"
 )
 
 var ErrInvalidDocument = fmt.Errorf("The provided identify document does not match the signature")
