@@ -12,13 +12,6 @@ import (
 // by the signature
 var ErrInvalidDocument = errors.New("The provided identify document does not match the signature")
 
-var (
-	// IdentityDocURL is the URL to retrieve the identity doc from
-	IdentityDocURL = "http://169.254.169.254/latest/dynamic/instance-identity/document"
-	// SignatureURL is the URL to retrieve the signed identity doc from
-	SignatureURL = "http://169.254.169.254/latest/dynamic/instance-identity/signature"
-)
-
 // InstanceIdentityDocument represents the information containe in an instances
 // identity document
 // http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html
@@ -36,6 +29,10 @@ type InstanceIdentityDocument struct {
 // VerifyDocumentAndSignature will confirm that the document is correct by
 // validating it against the signature and cert for the given region. It will
 // return the parsed document if it's valid, or ErrInvalidDocument if it's not.
+// The document can be retrieved from:
+// http://169.254.169.254/latest/dynamic/instance-identity/document
+// And the signature:
+// http://169.254.169.254/latest/dynamic/instance-identity/signature
 func VerifyDocumentAndSignature(region string, document, signature []byte) (*InstanceIdentityDocument, error) {
 	c, err := CertForRegion(region)
 	if err != nil {
