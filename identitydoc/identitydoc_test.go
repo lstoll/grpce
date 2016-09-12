@@ -40,4 +40,15 @@ func TestDocVerification(t *testing.T) {
 	if doc != nil {
 		t.Error("Invalid, errored document did not return nil")
 	}
+
+	regions := []string{"us-east-1", "us-west-1", "us-west-2", "ap-southeast-2",
+		"ap-southeast-1", "ap-northeast-1", "eu-central-1", "eu-west-1",
+		"sa-east-1"}
+	// "ap-south-1" and "ap-northeast-2" are currently unsupported
+	for _, r := range regions {
+		_, err := VerifyDocumentAndSignature(r, []byte{}, []byte{})
+		if err == ErrUnknownRegion {
+			t.Errorf("Region %s returned ErrUnknownRegion", r)
+		}
+	}
 }
