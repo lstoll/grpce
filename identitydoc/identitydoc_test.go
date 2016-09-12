@@ -1,10 +1,6 @@
 package identitydoc
 
-import (
-	"fmt"
-	"net/http"
-	"testing"
-)
+import "testing"
 
 var testSig = `Ob3mEexQi/91fA/HMqS7L1DraJ/8T/lAblai/PrSgx6FMMPpQpi2rftc/iUcs4Uufzq0NjXkwk95
 9cRES6s3T36hWgob/cutg5imhdy5++bymuzE8Z6T35pU3y3kn4eS6Yebna1atVbAFifeAqySGXCZ
@@ -43,26 +39,5 @@ func TestDocVerification(t *testing.T) {
 	}
 	if doc != nil {
 		t.Error("Invalid, errored document did not return nil")
-	}
-}
-
-func TestHTTPClient(t *testing.T) {
-	serveMux := http.NewServeMux()
-	serveMux.HandleFunc("/doc", func(w http.ResponseWriter, req *http.Request) {
-		fmt.Fprintf(w, testDoc)
-	})
-	serveMux.HandleFunc("/pkcs7", func(w http.ResponseWriter, req *http.Request) {
-		fmt.Fprintf(w, testSig)
-	})
-	go http.ListenAndServe("127.0.0.1:15800", serveMux)
-	IdentityDocURL = "http://127.0.0.1:15800/doc"
-	SignatureURL = "http://127.0.0.1:15800/pkcs7"
-
-	doc, sig, err := GetDocumentAndSignature()
-	if err != nil {
-		t.Errorf("Error fetching test doc %q", err)
-	}
-	if string(doc) != testDoc || string(sig) != testSig {
-		t.Errorf("Retrieved doc or sig doesn't match expectation")
 	}
 }

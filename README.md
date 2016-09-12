@@ -52,13 +52,10 @@ This is intended to be a generic component that can be used to perform any kind 
 Utilities for verifying AWS Instances' [Instance Identity Documents](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-identity-documents.html). This provides a method to fetch the document and pkcs7 signature fromt the Instance Metadata server, which clients can use to retrive them. It also provides a method to check the document & signature against AWS's Cert, returning relevant fields
 
 ```go
-// Will get fieles from the metadata API
-doc, sig, err := GetDocumentAndSignature()
-
 // Verify them, returning the document
 iddoc, err := VerifyDocumentAndSignature(doc, sig)
 if err != nil {
-	fmt.Prinln(iddoc.InstanceID)
+	fmt.Println(iddoc.InstanceID)
 }
 ```
 
