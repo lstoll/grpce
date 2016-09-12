@@ -75,7 +75,7 @@ func VerifyDocumentAndSignature(region string, doc, sig []byte) (*InstanceIdenti
 	return iid, nil
 }
 
-// httpGET is a ghetto retrying HTTP client. Will return the fetched body
+// httpGET is a basic retrying HTTP client. Will return the fetched body
 func httpGET(url string, maxRetries int) ([]byte, error) {
 	retries := 0
 	delay := 2 * time.Second
