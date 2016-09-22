@@ -70,6 +70,27 @@ s := grpc.NewServer(
 )
 ```
 
+### h2c
+
+Server and corresponding Dialer types for managing an h2c upgrade over a HTTP 1.1 endpoint.
+
+```
+s := grpc.NewServer()
+helloproto.RegisterHelloServer(s, helloH2C{})
+
+srv := &h2c.Server{
+	HTTP2Handler:      s,
+	NonUpgradeHandler: http.HandlerFunc(http.NotFound),
+}
+
+go http.Serve(ln, srv)
+```
+
+```
+conn, err := grpc.Dial(ln.Addr().String(), grpc.WithDialer(h2c.Dialer{}.DialGRPC), grpc.WithInsecure())
+```
+
+
 ## Flow design
 
 This is the model I was targeting
