@@ -1,6 +1,6 @@
 language: go
 go:
   - 1.7.1
-install: go get -t ./...
+install:
 script: go test -v ./...
 
