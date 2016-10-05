@@ -124,6 +124,7 @@ func (i *shaker) Clone() credentials.TransportCredentials {
 	}
 }
 
+// OverrideServerName overrides the server name, used before dial
 func (i *shaker) OverrideServerName(serverNameOverride string) error {
 	if i.wrap != nil {
 		i.wrap.OverrideServerName(serverNameOverride)

@@ -93,6 +93,25 @@ func NewServerTransportCredentials(store KVStore, address string, validUntil tim
 	}
 }
 
+// Clone returns a copy of the credentials
+func (d *dcerttransport) Clone() credentials.TransportCredentials {
+	// It's unclear what clone is for, but this should be sharing/thread safe
+	return &dcerttransport{
+		store:         d.store,
+		clientUse:     d.clientUse,
+		serveraddress: d.serveraddress,
+		validUntil:    d.validUntil,
+		servercreds:   d.servercreds,
+		opts:          d.opts,
+	}
+}
+
+// OverrideServerName overrides the server name, used before dial
+func (d *dcerttransport) OverrideServerName(serverNameOverride string) error {
+	d.serveraddress = serverNameOverride
+	return nil
+}
+
 func (d *dcerttransport) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	if !d.clientUse {
 		return nil, nil, errors.New("Credentials not initialized for client use via NewClientDynamicCertTransportCredentials")
