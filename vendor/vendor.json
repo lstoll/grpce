@@ -51,76 +51,76 @@
 			"revisionTime": "2016-06-19T19:44:24Z"
 		},
 		{
-			"checksumSHA1": "R/zHGOyQVEPeThF/hfvhwc7BZpk=",
+			"checksumSHA1": "N0GmUbip6LljIQkixSZnQ7a76Fs=",
 			"path": "google.golang.org/grpc",
-			"revision": "0032a855ba5c8a3c8e0d71c2deef354b70af1584",
-			"revisionTime": "2016-08-19T18:23:41Z",
-			"version": "v1.0.1-GA",
-			"versionExact": "v1.0.1-GA"
+			"revision": "b1a2821ca5a4fd6b6e48ddfbb7d6d7584d839d21",
+			"revisionTime": "2016-10-03T17:23:44Z",
+			"version": "v1.0.2",
+			"versionExact": "v1.0.2"
 		},
 		{
 			"checksumSHA1": "08icuA15HRkdYCt6H+Cs90RPQsY=",
 			"path": "google.golang.org/grpc/codes",
-			"revision": "0032a855ba5c8a3c8e0d71c2deef354b70af1584",
-			"revisionTime": "2016-08-19T18:23:41Z",
-			"version": "v1.0.1-GA",
-			"versionExact": "v1.0.1-GA"
+			"revision": "b1a2821ca5a4fd6b6e48ddfbb7d6d7584d839d21",
+			"revisionTime": "2016-10-03T17:23:44Z",
+			"version": "v1.0.2",
+			"versionExact": "v1.0.2"
 		},
 		{
-			"checksumSHA1": "4Wx8hSn+xOJAk2iBVFquOdijGOU=",
+			"checksumSHA1": "Vd1MU+Ojs7GeS6jE52vlxtXvIrI=",
 			"path": "google.golang.org/grpc/credentials",
-			"revision": "0032a855ba5c8a3c8e0d71c2deef354b70af1584",
-			"revisionTime": "2016-08-19T18:23:41Z",
-			"version": "v1.0.1-GA",
-			"versionExact": "v1.0.1-GA"
+			"revision": "b1a2821ca5a4fd6b6e48ddfbb7d6d7584d839d21",
+			"revisionTime": "2016-10-03T17:23:44Z",
+			"version": "v1.0.2",
+			"versionExact": "v1.0.2"
 		},
 		{
 			"checksumSHA1": "3Lt5hNAG8qJAYSsNghR5uA1zQns=",
 			"path": "google.golang.org/grpc/grpclog",
-			"revision": "0032a855ba5c8a3c8e0d71c2deef354b70af1584",
-			"revisionTime": "2016-08-19T18:23:41Z",
-			"version": "v1.0.1-GA",
-			"versionExact": "v1.0.1-GA"
+			"revision": "b1a2821ca5a4fd6b6e48ddfbb7d6d7584d839d21",
+			"revisionTime": "2016-10-03T17:23:44Z",
+			"version": "v1.0.2",
+			"versionExact": "v1.0.2"
 		},
 		{
 			"checksumSHA1": "T3Q0p8kzvXFnRkMaK/G8mCv6mc0=",
 			"path": "google.golang.org/grpc/internal",
-			"revision": "0032a855ba5c8a3c8e0d71c2deef354b70af1584",
-			"revisionTime": "2016-08-19T18:23:41Z",
-			"version": "v1.0.1-GA",
-			"versionExact": "v1.0.1-GA"
+			"revision": "b1a2821ca5a4fd6b6e48ddfbb7d6d7584d839d21",
+			"revisionTime": "2016-10-03T17:23:44Z",
+			"version": "v1.0.2",
+			"versionExact": "v1.0.2"
 		},
 		{
-			"checksumSHA1": "rxtneb9jDjKPHNZhC5obfG++6bI=",
+			"checksumSHA1": "P64GkSdsTZ8Nxop5HYqZJ6e+iHs=",
 			"path": "google.golang.org/grpc/metadata",
-			"revision": "0032a855ba5c8a3c8e0d71c2deef354b70af1584",
-			"revisionTime": "2016-08-19T18:23:41Z",
-			"version": "v1.0.1-GA",
-			"versionExact": "v1.0.1-GA"
+			"revision": "b1a2821ca5a4fd6b6e48ddfbb7d6d7584d839d21",
+			"revisionTime": "2016-10-03T17:23:44Z",
+			"version": "v1.0.2",
+			"versionExact": "v1.0.2"
 		},
 		{
 			"checksumSHA1": "4GSUFhOQ0kdFlBH4D5OTeKy78z0=",
 			"path": "google.golang.org/grpc/naming",
-			"revision": "0032a855ba5c8a3c8e0d71c2deef354b70af1584",
-			"revisionTime": "2016-08-19T18:23:41Z",
-			"version": "v1.0.1-GA",
-			"versionExact": "v1.0.1-GA"
+			"revision": "b1a2821ca5a4fd6b6e48ddfbb7d6d7584d839d21",
+			"revisionTime": "2016-10-03T17:23:44Z",
+			"version": "v1.0.2",
+			"versionExact": "v1.0.2"
 		},
 		{
 			"checksumSHA1": "3RRoLeH6X2//7tVClOVzxW2bY+E=",
 			"path": "google.golang.org/grpc/peer",
-			"revision": "0032a855ba5c8a3c8e0d71c2deef354b70af1584",
-			"revisionTime": "2016-08-19T18:23:41Z",
-			"version": "v1.0.1-GA",
-			"versionExact": "v1.0.1-GA"
+			"revision": "b1a2821ca5a4fd6b6e48ddfbb7d6d7584d839d21",
+			"revisionTime": "2016-10-03T17:23:44Z",
+			"version": "v1.0.2",
+			"versionExact": "v1.0.2"
 		},
 		{
-			"checksumSHA1": "dwol7IiUGWqDNNf0Oy2PECJwtdk=",
+			"checksumSHA1": "dzbx9oVtSfVgNE3lTl+r5xOXxcw=",
 			"path": "google.golang.org/grpc/transport",
-			"revision": "0032a855ba5c8a3c8e0d71c2deef354b70af1584",
-			"revisionTime": "2016-08-19T18:23:41Z",
-			"version": "v1.0.1-GA",
-			"versionExact": "v1.0.1-GA"
+			"revision": "b1a2821ca5a4fd6b6e48ddfbb7d6d7584d839d21",
+			"revisionTime": "2016-10-03T17:23:44Z",
+			"version": "v1.0.2",
+			"versionExact": "v1.0.2"
 		}
 	],
 	"rootPath": "github.com/lstoll/grpce"
