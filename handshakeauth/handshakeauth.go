@@ -109,6 +109,29 @@ func NewServerTransportCredentialsWrapping(validator ClientHandshakeValidator, w
 	}
 }
 
+// Clone returns a copy of the credentials
+func (i *shaker) Clone() credentials.TransportCredentials {
+	var wrapped credentials.TransportCredentials
+	if i.wrap != nil {
+		wrapped = i.wrap.Clone()
+	}
+	return &shaker{
+		wrap: wrapped,
+		// We can re-use these
+		server:    i.server,
+		validator: i.validator,
+		opts:      i.opts,
+	}
+}
+
+// OverrideServerName overrides the server name, used before dial
+func (i *shaker) OverrideServerName(serverNameOverride string) error {
+	if i.wrap != nil {
+		i.wrap.OverrideServerName(serverNameOverride)
+	}
+	return nil
+}
+
 func (i *shaker) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (conn net.Conn, ai credentials.AuthInfo, err error) {
 	if i.server {
 		panic("This handshaker is only for client use")
