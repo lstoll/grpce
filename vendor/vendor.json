@@ -9,12 +9,6 @@
 			"revisionTime": "2016-09-24T01:53:50Z"
 		},
 		{
-			"checksumSHA1": "PmprWFMVEaiwssGB7jIaiQKu3/4=",
-			"path": "github.com/grpc/grpc-go",
-			"revision": "afdabe5738c5296bd52692f9577185d95bd5e828",
-			"revisionTime": "2016-07-21T23:42:44Z"
-		},
-		{
 			"checksumSHA1": "L9tyl9ng4rQHTPVoQK1TIuMO2VA=",
 			"path": "github.com/rcrowley/go-metrics",
 			"revision": "cfa5a85e9f0abbdf1701b59082c36fc7bff10759",
