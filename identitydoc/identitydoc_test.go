@@ -2,6 +2,7 @@ package identitydoc
 
 import (
 	"bytes"
+	"encoding/base64"
 	"testing"
 )
 
@@ -38,7 +39,12 @@ func TestDocVerification(t *testing.T) {
 	if !bytes.Equal(doc.Doc, []byte(testDoc)) {
 		t.Error("Raw document did not match input document")
 	}
-	if !bytes.Equal(doc.Sig, []byte(testSig)) {
+
+	rawSig, err := base64.StdEncoding.DecodeString(string(testSig))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(doc.Sig, rawSig) {
 		t.Error("Document signature did not match input signature")
 	}
 
