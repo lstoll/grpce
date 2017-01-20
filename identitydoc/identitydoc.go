@@ -48,6 +48,9 @@ type InstanceIdentityDocument struct {
 	PendingTime      time.Time `json:"pendingTime"`
 	InstanceType     string    `json:"instanceType"`
 	ImageID          string    `json:"imageId"`
+
+	Doc json.RawMessage `json:"-"`
+	Sig []byte          `json:"-"`
 }
 
 // VerifyDocumentAndSignature will confirm that the document is correct by
@@ -83,5 +86,8 @@ func VerifyDocumentAndSignature(region string, document, signature []byte) (*Ins
 	if err != nil {
 		return nil, err
 	}
+	iid.Doc = document
+	iid.Sig = signature
+
 	return iid, nil
 }

@@ -1,6 +1,9 @@
 package identitydoc
 
-import "testing"
+import (
+	"bytes"
+	"testing"
+)
 
 var testSig = `Ob3mEexQi/91fA/HMqS7L1DraJ/8T/lAblai/PrSgx6FMMPpQpi2rftc/iUcs4Uufzq0NjXkwk95
 9cRES6s3T36hWgob/cutg5imhdy5++bymuzE8Z6T35pU3y3kn4eS6Yebna1atVbAFifeAqySGXCZ
@@ -30,6 +33,13 @@ func TestDocVerification(t *testing.T) {
 	}
 	if doc == nil {
 		t.Error("Test document failed auth")
+	}
+
+	if !bytes.Equal(doc.Doc, []byte(testDoc)) {
+		t.Error("Raw document did not match input document")
+	}
+	if !bytes.Equal(doc.Sig, []byte(testSig)) {
+		t.Error("Document signature did not match input signature")
 	}
 
 	mod := testDoc + "lol"
