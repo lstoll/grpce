@@ -36,6 +36,21 @@ C1haGgSI/A1uZUKs/Zfnph0oEI0/hu1IIJ/SKBDtN5lvmZ/IzbOPIJWirlsllQIQ
 7zvWbGd9c9+Rm3p04oTvhup99la7kZqevJK0QRdD/6NpCKsqP/0=
 -----END CERTIFICATE-----`
 
+var (
+	awsCert *x509.Certificate
+
+	awsCertPEM, _ = pem.Decode([]byte(genericAWSPublicCertificateIdentity))
+)
+
+func init() {
+	var err error
+	if awsCert, err = x509.ParseCertificate(awsCertPEM.Bytes); err != nil {
+		// We are loading static data, if something goes wrong here it's a real
+		// problem
+		panic(err)
+	}
+}
+
 // InstanceIdentityDocument represents the information contained in an instances
 // identity document
 // http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html
@@ -48,6 +63,9 @@ type InstanceIdentityDocument struct {
 	PendingTime      time.Time `json:"pendingTime"`
 	InstanceType     string    `json:"instanceType"`
 	ImageID          string    `json:"imageId"`
+
+	Doc json.RawMessage `json:"-"`
+	Sig []byte          `json:"-"`
 }
 
 // VerifyDocumentAndSignature will confirm that the document is correct by
@@ -60,28 +78,23 @@ type InstanceIdentityDocument struct {
 // If the region is unknown or has no cert, ErrUnknownRegion region will be
 // returned. If there are any other errors, the error will be passed on.
 func VerifyDocumentAndSignature(region string, document, signature []byte) (*InstanceIdentityDocument, error) {
-	p, _ := pem.Decode([]byte(genericAWSPublicCertificateIdentity))
-	c, err := x509.ParseCertificate(p.Bytes)
-	if err != nil {
-		// We are loading static data, if something goes wrong here it's a real
-		// problem
-		panic(err)
-	}
-
-	ds, err := base64.StdEncoding.DecodeString(string(signature))
+	rawSig, err := base64.StdEncoding.DecodeString(string(signature))
 	if err != nil {
 		return nil, err
 	}
 
-	err = c.CheckSignature(x509.SHA256WithRSA, document, []byte(ds))
-	if err != nil {
+	iid := &InstanceIdentityDocument{
+		Doc: document,
+		Sig: rawSig,
+	}
+
+	if err := json.Unmarshal(document, iid); err != nil {
 		return nil, ErrInvalidDocument
 	}
 
-	iid := &InstanceIdentityDocument{}
-	err = json.Unmarshal(document, iid)
-	if err != nil {
-		return nil, err
-	}
-	return iid, nil
+	return iid, iid.CheckSignature()
+}
+
+func (d InstanceIdentityDocument) CheckSignature() error {
+	return awsCert.CheckSignature(x509.SHA256WithRSA, d.Doc, d.Sig)
 }
