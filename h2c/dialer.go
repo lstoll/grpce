@@ -3,6 +3,7 @@ package h2c
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"errors"
 	"io/ioutil"
 	"net"
@@ -14,14 +15,15 @@ import (
 
 // Dialer connects to a HTTP 1.1 server and performs an h2c upgrade to an HTTP2 connection.
 type Dialer struct {
-	Dialer *net.Dialer
-	URL    *url.URL
+	Dialer    *net.Dialer
+	TLSConfig *tls.Config
+	URL       *url.URL
 }
 
 // DialContext connects to the address on the named network using the provided context.
 func (d Dialer) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
 	dialfn := http.DefaultTransport.(*http.Transport).DialContext
-	if d.Dialer != nil && d.Dialer.DialContext != nil {
+	if d.Dialer != nil {
 		dialfn = d.Dialer.DialContext
 	}
 
@@ -30,7 +32,21 @@ func (d Dialer) DialContext(ctx context.Context, network, addr string) (net.Conn
 		return nil, err
 	}
 
+	tlsConfig := d.TLSConfig
+	if tlsConfig == nil && d.URL != nil && d.URL.Scheme == "https" {
+		tlsConfig = &tls.Config{
+			ServerName: d.URL.Hostname(),
+		}
+	}
+
+	if tlsConfig != nil {
+		conn = tls.Client(conn, tlsConfig)
+	}
+
 	u := "http://" + addr
+	if d.TLSConfig != nil {
+		u = "https://" + addr
+	}
 	if d.URL != nil {
 		u = d.URL.String()
 	}
