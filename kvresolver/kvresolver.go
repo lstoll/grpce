@@ -2,7 +2,6 @@ package kvresolver
 
 import (
 	"errors"
-	"sync"
 	"time"
 
 	"github.com/lstoll/grpce/reporters"
@@ -21,8 +20,6 @@ type pollWatcher struct {
 	updChan       chan []*naming.Update
 	closeChan     chan struct{}
 	currAddresses []string
-
-	updatewg *sync.WaitGroup
 }
 
 type kvrOptions struct {
@@ -66,7 +63,6 @@ func (p *pollResolver) Resolve(target string) (naming.Watcher, error) {
 		updChan:       uc,
 		closeChan:     cc,
 		currAddresses: []string{},
-		updatewg:      new(sync.WaitGroup),
 	}
 
 	updateAddrs := func() error {
@@ -112,8 +108,10 @@ func (p *pollResolver) Resolve(target string) (naming.Watcher, error) {
 	}
 
 	go func() {
-		defer pw.updatewg.Done()
-		pw.updatewg.Add(1)
+		defer close(uc)
+
+		// Initial seed.
+		updateAddrs()
 
 		ticker := time.NewTicker(p.pollInterval)
 		for {
@@ -131,21 +129,11 @@ func (p *pollResolver) Resolve(target string) (naming.Watcher, error) {
 		}
 	}()
 
-	// Initial seed. Do async to not block
-	go func() {
-		defer pw.updatewg.Done()
-		pw.updatewg.Add(1)
-
-		updateAddrs()
-	}()
-
 	return pw, nil
 }
 
 func (p *pollWatcher) Close() {
 	close(p.closeChan)
-	p.updatewg.Wait()
-	close(p.updChan)
 }
 
 func (p *pollWatcher) Next() ([]*naming.Update, error) {
