@@ -62,7 +62,9 @@ func (d Dialer) DialContext(ctx context.Context, network, addr string) (net.Conn
 		return nil, err
 	}
 
-	res, err := http.ReadResponse(bufio.NewReader(conn), req)
+	br := bufio.NewReader(conn)
+
+	res, err := http.ReadResponse(br, req)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +81,7 @@ func (d Dialer) DialContext(ctx context.Context, network, addr string) (net.Conn
 		return nil, errors.New("h2c upgrade failed, upgrade response body was non empty")
 	}
 
-	return conn, nil
+	return &bufferedConn{br: br, Conn: conn}, nil
 }
 
 // Dial connects to the address on the named network.
@@ -91,4 +93,13 @@ func (d Dialer) Dial(network, addr string) (net.Conn, error) {
 func (d Dialer) DialGRPC(addr string, timeout time.Duration) (net.Conn, error) {
 	ctx, _ := context.WithTimeout(context.Background(), timeout)
 	return d.DialContext(ctx, "tcp", addr)
+}
+
+type bufferedConn struct {
+	br *bufio.Reader
+	net.Conn
+}
+
+func (b *bufferedConn) Read(p []byte) (int, error) {
+	return b.br.Read(p)
 }
