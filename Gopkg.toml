@@ -33,6 +33,10 @@
   name = "github.com/golang/protobuf"
   version = "~1.2.0"
 
+[[constraint]]
+  name = "github.com/hydrogen18/memlistener"
+  branch = "master"
+
 [prune]
   go-tests = true
   unused-packages = true
