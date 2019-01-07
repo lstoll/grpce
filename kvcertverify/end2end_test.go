@@ -36,7 +36,7 @@ func (k *kvstore) Delete(key string) error {
 func TestDynamicCerts(t *testing.T) {
 	store := &kvstore{data: map[string][]byte{}}
 
-	address := "127.0.0.1:15611"
+	address := "localhost:15611"
 	lis, err := net.Listen("tcp", address)
 	if err != nil {
 		panic(err)
