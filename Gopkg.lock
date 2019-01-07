@@ -16,6 +16,14 @@
   version = "v1.2.0"
 
 [[projects]]
+  branch = "master"
+  digest = "1:2ad75332b892d3a21d35fc24aba8e635f75ed461c61d9b4ca6c1e33a5788c083"
+  name = "github.com/hydrogen18/memlistener"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "54553eb933fb8c2d6103afed4c7173d807d26c0a"
+
+[[projects]]
   digest = "1:d0b5a34ea6ee5a792efb279b54d09245d5d06cfd86e7382abd82a5ddcd86324f"
   name = "github.com/rcrowley/go-metrics"
   packages = ["."]
@@ -122,6 +130,7 @@
   analyzer-version = 1
   input-imports = [
     "github.com/golang/protobuf/proto",
+    "github.com/hydrogen18/memlistener",
     "github.com/rcrowley/go-metrics",
     "golang.org/x/net/context",
     "golang.org/x/net/http2",
