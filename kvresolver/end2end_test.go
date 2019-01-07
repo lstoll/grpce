@@ -57,7 +57,9 @@ func TestEndToEnd(t *testing.T) {
 	conn, err := grpc.Dial("testtarget",
 		grpc.WithBalancer(grpc.RoundRobin(New("testtarget", 1*time.Millisecond, lookup, WithErrorReporter(ep)))),
 		grpc.WithInsecure(),
-		grpc.WithTimeout(1*time.Second))
+		grpc.WithTimeout(1*time.Second),
+		grpc.WithBlock(),
+	)
 	if err == nil {
 		t.Fatal("Did not fail to connect with no servers")
 	}
@@ -78,7 +80,7 @@ func TestEndToEnd(t *testing.T) {
 
 	c := helloproto.NewHelloClient(conn)
 
-	_, err = c.HelloWorld(context.Background(), &helloproto.HelloRequest{Name: "process"})
+	_, err = c.HelloWorld(context.Background(), &helloproto.HelloRequest{Name: "process"}, grpc.FailFast(false))
 	if err != nil {
 		t.Fatalf("Error calling RPC: %q", err)
 	}

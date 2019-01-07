@@ -1,6 +1,7 @@
 package kvcertverify
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
@@ -12,10 +13,7 @@ import (
 	"net"
 	"time"
 
-	"golang.org/x/net/context"
-
 	"github.com/lstoll/grpce/reporters"
-
 	"google.golang.org/grpc/credentials"
 )
 
@@ -170,8 +168,8 @@ func genX509KeyPair(name string, validUntil time.Time) (*tls.Certificate, error)
 		NotAfter:              validUntil,
 		SubjectKeyId:          []byte{113, 117, 105, 99, 107, 115, 101, 114, 118, 101},
 		BasicConstraintsValid: true,
-		IsCA:        true,
-		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		IsCA:                  true,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		KeyUsage: x509.KeyUsageKeyEncipherment |
 			x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
 	}

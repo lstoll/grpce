@@ -1,6 +1,7 @@
 package handshakeauth
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -8,9 +9,6 @@ import (
 	"net"
 
 	"github.com/lstoll/grpce/reporters"
-
-	"golang.org/x/net/context"
-
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
 )
