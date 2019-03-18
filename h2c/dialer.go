@@ -90,8 +90,14 @@ func (d Dialer) Dial(network, addr string) (net.Conn, error) {
 }
 
 // DialGRPC connects to the address before timeout.
+// Deprecated: use DialGRPCContext and grpc.WithContextDialer.
 func (d Dialer) DialGRPC(addr string, timeout time.Duration) (net.Conn, error) {
 	ctx, _ := context.WithTimeout(context.Background(), timeout)
+	return d.DialContext(ctx, "tcp", addr)
+}
+
+// DialGRPCContext implements the interface required by grpc.WithContextDialer.
+func (d Dialer) DialGRPCContext(ctx context.Context, addr string) (net.Conn, error) {
 	return d.DialContext(ctx, "tcp", addr)
 }
 
