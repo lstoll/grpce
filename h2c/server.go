@@ -14,12 +14,17 @@ import (
 type Server struct {
 	HTTP2Handler      http.Handler
 	NonUpgradeHandler http.Handler
+	// ALBSupport can be used to enable this listener to work behind a AWS ALB.
+	// These strip the Connection header for non-websocket upgrades, so we only
+	// use the Upgrade header in this case. This is not to spec, but seems to
+	// work OK.
+	ALBSupport bool
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	connection, upgrade := r.Header.Get("Connection"), r.Header.Get("Upgrade")
 
-	if !isH2C(connection, upgrade) {
+	if !s.isH2C(connection, upgrade) {
 		s.NonUpgradeHandler.ServeHTTP(w, r)
 		return
 	}
@@ -45,9 +50,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func isH2C(connection, upgrade string) bool {
+func (s *Server) isH2C(connection, upgrade string) bool {
 	connection, upgrade = strings.ToLower(connection), strings.ToLower(upgrade)
-	return upgrade == "h2c" && (connection == "upgrade" || strings.HasPrefix(connection, "upgrade,"))
+	return upgrade == "h2c" && (s.ALBSupport || connection == "upgrade" || strings.HasPrefix(connection, "upgrade,"))
 }
 
 type bufConn struct {
