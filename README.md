@@ -27,26 +27,6 @@ conn, err := grpc.Dial("testtarget",
 	grpc.WithBalancer(grpc.RoundRobin(kvresolver.New("testtarget", 10*time.Second, lookup))))
 ```
 
-### Dynamic certs
-
-This is a TLS credential implementation for the server that generates
-a self-signed cert on the fly. This will get persisted in a KV
-store. The client implementation looks up the cert based on the
-address from the KV store, and validates it at the root cert for this
-connection.
-
-```go
-// store matches a Get/Put/Delete interface.
-s := grpc.NewServer(grpc.Creds(kvcertverify.NewServerTransportCredentials(store, address, time.Now().AddDate(0, 0, 1))))
-
-// The client gets the same store.
-conn, err := grpc.Dial(address, grpc.WithTransportCredentials(kvcertverify.NewClientTransportCredentials(store)))
-```
-
-### Handshake transport auth
-
-This is intended to be a generic component that can be used to perform any kind of handshake over the connection when it's established, but before gRPC consumes it. It can wrap another transport (i.e the dynamic certs).
-
 ### Instance Identity Document Verification.
 
 Utilities for verifying AWS Instances' [Instance Identity Documents](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-identity-documents.html). This provides a method to fetch the document and pkcs7 signature fromt the Instance Metadata server, which clients can use to retrive them. It also provides a method to check the document & signature against AWS's Cert, returning relevant fields
@@ -89,15 +69,3 @@ go http.Serve(ln, srv)
 ```
 conn, err := grpc.Dial(ln.Addr().String(), grpc.WithDialer(h2c.Dialer{}.DialGRPC), grpc.WithInsecure())
 ```
-
-
-## Flow design
-
-This is the model I was targeting
-
-![Diagram representing flow in system](https://cdn.lstoll.net/screen/grpcexperiments_flow.html_-_draw.io_2016-06-11_14-29-17.png)
-
-
-## Security
-
-The instance identity document security model and code hasn't really been audited or had deep thought put in to it. The concept works in my head, but I need an external opinion and to think about all the risks. The certificate storage is potentially easier to reason about, the model for server verification depends on managing access to write and update to the KV store.
