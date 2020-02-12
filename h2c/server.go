@@ -25,8 +25,8 @@ type Server struct {
 	// work OK.
 	ALBSupport bool
 
-	connections map[net.Conn]struct{}
-	mutex       sync.Mutex
+	connections   map[net.Conn]struct{}
+	connectionsMu sync.Mutex
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -60,14 +60,15 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Shutdown blocks until all connections have completed.
+// Note that this will not actually close the listener, since we don't have
+// access to it here. Instead, it is assumed that the caller has already
+// closed the underlying listener prior to calling Shutdown.
 func (s *Server) Shutdown(ctx context.Context) error {
 	ticker := time.NewTicker(shutdownPollInterval)
 	defer ticker.Stop()
 	for {
-		// TODO: This is a pretty naive approach.
-		// Just checking whether there are any connections used for requests
-		// that haven't yet finished. Hopefully it's "good enough".
-		if len(s.connections) == 0 {
+		if s.noActiveConnections() {
 			return nil
 		}
 		select {
@@ -79,8 +80,8 @@ func (s *Server) Shutdown(ctx context.Context) error {
 }
 
 func (s *Server) trackConn(conn net.Conn, add bool) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
+	s.connectionsMu.Lock()
+	defer s.connectionsMu.Unlock()
 
 	if s.connections == nil {
 		s.connections = make(map[net.Conn]struct{})
@@ -90,6 +91,16 @@ func (s *Server) trackConn(conn net.Conn, add bool) {
 	} else {
 		delete(s.connections, conn)
 	}
+}
+
+func (s *Server) noActiveConnections() bool {
+	s.connectionsMu.Lock()
+	defer s.connectionsMu.Unlock()
+
+	// This is a pretty naive approach.
+	// Just checking whether there are any connections used for requests
+	// that haven't yet finished. However, it's "good enough".
+	return len(s.connections) == 0
 }
 
 func (s *Server) isH2C(connection, upgrade string) bool {
