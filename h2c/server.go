@@ -2,12 +2,17 @@ package h2c
 
 import (
 	"bufio"
+	"context"
 	"net"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	"golang.org/x/net/http2"
 )
+
+const shutdownPollInterval = 500 * time.Millisecond
 
 // Server is an HTTP 1.1 server that can detect h2c upgrades and serve them by
 // an HTTP2 handler.
@@ -19,6 +24,9 @@ type Server struct {
 	// use the Upgrade header in this case. This is not to spec, but seems to
 	// work OK.
 	ALBSupport bool
+
+	connections   map[net.Conn]struct{}
+	connectionsMu sync.Mutex
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -44,10 +52,55 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	s.trackConn(conn, true)
+	defer s.trackConn(conn, false)
 
 	new(http2.Server).ServeConn(bufConn{conn, bufrw}, &http2.ServeConnOpts{
 		Handler: s.HTTP2Handler,
 	})
+}
+
+// Shutdown blocks until all connections have completed.
+// Note that this will not actually close the listener, since we don't have
+// access to it here. Instead, it is assumed that the caller has already
+// closed the underlying listener prior to calling Shutdown.
+func (s *Server) Shutdown(ctx context.Context) error {
+	ticker := time.NewTicker(shutdownPollInterval)
+	defer ticker.Stop()
+	for {
+		if s.noActiveConnections() {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}
+
+func (s *Server) trackConn(conn net.Conn, add bool) {
+	s.connectionsMu.Lock()
+	defer s.connectionsMu.Unlock()
+
+	if s.connections == nil {
+		s.connections = make(map[net.Conn]struct{})
+	}
+	if add {
+		s.connections[conn] = struct{}{}
+	} else {
+		delete(s.connections, conn)
+	}
+}
+
+func (s *Server) noActiveConnections() bool {
+	s.connectionsMu.Lock()
+	defer s.connectionsMu.Unlock()
+
+	// This is a pretty naive approach.
+	// Just checking whether there are any connections used for requests
+	// that haven't yet finished. However, it's "good enough".
+	return len(s.connections) == 0
 }
 
 func (s *Server) isH2C(connection, upgrade string) bool {
